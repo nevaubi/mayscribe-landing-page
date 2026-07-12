@@ -239,6 +239,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
     finalLedgerRef.current = "";
     lastFinalEndRef.current = 0;
     quietSinceRef.current = null;
+    pcmBufferRef.current = [];
+    pcmBufferSamplesRef.current = 0;
     setQuietMsRemaining(null);
     setDictationStatus("connecting");
 
