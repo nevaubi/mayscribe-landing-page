@@ -906,47 +906,75 @@ export function EmrDashboard() {
                       {(["subjective", "objective", "assessment", "plan"] as const).map(section => {
                         const isActive = activeSoapSection === section;
                         const isListening = isActive && status === "listening";
-                        const isFlashing = flashSection === section;
+                        const sectionHolds = anchors
+                          .filter((a) => a.section === section && a.state === "hold")
+                          .map((a) => ({ start: a.start, end: a.end, span: a.span }));
+                        const sectionDismissed = anchors
+                          .filter((a) => a.section === section && a.state === "dismissed")
+                          .map((a) => ({ start: a.start, end: a.end, span: a.span }));
+                        const flashForSection =
+                          flashRange && flashRange.section === section
+                            ? { start: flashRange.start, end: flashRange.end }
+                            : null;
+                        const activeHold = openHolds[activeHoldIndex];
+                        const activeHoldId =
+                          activeHold && activeHold.section === section
+                            ? activeHold.id
+                            : null;
                         return (
-                          <textarea
+                          <div
                             key={section}
-                            ref={(el) => { textareaRefs.current[section] = el; }}
-                            data-soap-section={section}
-                            className={`w-full resize-none p-4 text-xs leading-relaxed font-mono text-foreground focus:outline-none border-none transition-colors ${
-                              isActive ? "block" : "hidden"
-                            } ${isListening ? "ring-2 ring-inset ring-[#0D57FA]" : ""}`}
-                            rows={12}
-                            style={{
-                              fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: "11.5px",
-                              lineHeight: "1.7",
-                              backgroundColor: isFlashing ? "#EEF4FC" : "transparent",
-                              transition: "background-color 600ms ease",
-                            }}
-                            placeholder="Press F2 or click the mic to dictate."
-                            value={soap[section]}
-                            onChange={e => {
-                              setSoap(prev => ({ ...prev, [section]: e.target.value }));
-                              syncCaretFromElement(e.target);
-                            }}
-                            onSelect={e => {
-                              syncCaretFromElement(e.target as HTMLTextAreaElement);
-                            }}
-                            onFocus={e => {
-                              syncCaretFromElement(e.target);
-                            }}
-                            onKeyUp={e => {
-                              syncCaretFromElement(e.target as HTMLTextAreaElement);
-                            }}
-                            onClick={e => {
-                              syncCaretFromElement(e.target as HTMLTextAreaElement);
-                            }}
-                            onBlur={e => {
-                              caretRef.current[section] = e.target.selectionStart ?? e.target.value.length;
-                            }}
-                          />
+                            className={`relative ${isActive ? "block" : "hidden"}`}
+                          >
+                            <TextOverlay
+                              value={soap[section]}
+                              holds={sectionHolds}
+                              dismissed={sectionDismissed}
+                              flashRange={flashForSection}
+                              activeHoldId={activeHoldId}
+                            />
+                            <textarea
+                              ref={(el) => { textareaRefs.current[section] = el; }}
+                              data-soap-section={section}
+                              className={`relative w-full resize-none p-4 text-xs leading-relaxed focus:outline-none border-none bg-transparent ${
+                                isListening ? "ring-2 ring-inset ring-[#0D57FA]" : ""
+                              }`}
+                              rows={12}
+                              style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: "11.5px",
+                                lineHeight: "1.7",
+                                color: "#0B1F52",
+                              }}
+                              placeholder="Press F2 or click the mic to dictate."
+                              value={soap[section]}
+                              onChange={e => {
+                                const v = e.target.value;
+                                setSoap(prev => ({ ...prev, [section]: v }));
+                                handleManualEdit(section, v);
+                                syncCaretFromElement(e.target);
+                              }}
+                              onSelect={e => syncCaretFromElement(e.target as HTMLTextAreaElement)}
+                              onFocus={e => syncCaretFromElement(e.target)}
+                              onKeyUp={e => syncCaretFromElement(e.target as HTMLTextAreaElement)}
+                              onClick={e => syncCaretFromElement(e.target as HTMLTextAreaElement)}
+                              onBlur={e => {
+                                caretRef.current[section] = e.target.selectionStart ?? e.target.value.length;
+                              }}
+                            />
+                          </div>
                         );
                       })}
+
+                      {/* Floating section caption while dictating */}
+                      {status === "listening" && (
+                        <div
+                          className="pointer-events-none absolute top-2 right-3 z-30 rounded-md border bg-white/95 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider shadow-sm"
+                          style={{ borderColor: "#D8E2F0", color: "#0D57FA" }}
+                        >
+                          Section: {dictationTargetRef.current}
+                        </div>
+                      )}
 
                       <DictationStrip
                         status={status}
@@ -963,21 +991,46 @@ export function EmrDashboard() {
                       />
                     </div>
 
+                    {/* Review Tray */}
+                    {holdEntries.length > 0 && (
+                      <ReviewTray
+                        holds={holdEntries}
+                        activeIndex={activeHoldIndex}
+                        onSelect={(idx) => setActiveHoldIndex(idx)}
+                        onConfirm={(id, choice) => confirmHold(id, choice)}
+                        onDismiss={(id) => dismissHold(id)}
+                      />
+                    )}
+
                     <div className="px-4 py-2.5 border-t border-border bg-[#F8FAFC] flex items-center justify-between">
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                         <Info className="w-3.5 h-3.5 text-[#1B4F8A]" />
                         Auto-saved {draftTime} · Chen, Sarah L., MD
+                        {verifyStats.checked > 0 && (
+                          <span className="ml-2 text-[10px] text-[#7A8AAC]">
+                            · {verifyStats.checked} verified{verifyStats.held > 0 ? ` · ${verifyStats.held} held` : ""}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded hover:bg-muted transition-colors">
                           <Save className="w-3.5 h-3.5" /> Save Draft
                         </button>
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#1B4F8A] text-white rounded hover:bg-[#153F70] transition-colors font-medium">
+                        <button
+                          disabled={openHolds.length > 0}
+                          title={openHolds.length > 0 ? `${openHolds.length} item${openHolds.length === 1 ? "" : "s"} need review` : ""}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded transition-all font-medium ${
+                            openHolds.length > 0
+                              ? "bg-slate-300 text-white cursor-not-allowed"
+                              : `bg-[#1B4F8A] text-white hover:bg-[#153F70] ${signPulse ? "ring-2 ring-[#0D57FA] ring-offset-1" : ""}`
+                          }`}
+                        >
                           <Send className="w-3.5 h-3.5" /> Sign & Submit
                         </button>
                       </div>
                     </div>
                   </div>
+
 
                 </div>
 
