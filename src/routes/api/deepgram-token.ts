@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const ALLOWED_HOST_SUFFIXES = [
+const ALLOWED_HOST_ENTRIES = [
   "localhost",
   "127.0.0.1",
-  ".lovable.app",
   "lovable.app",
+  ".lovable.app",
   "mayscribe.com",
   ".mayscribe.com",
 ];
@@ -13,9 +13,13 @@ function originAllowed(originHeader: string | null): boolean {
   if (!originHeader) return false;
   try {
     const host = new URL(originHeader).hostname;
-    return ALLOWED_HOST_SUFFIXES.some(
-      (suf) => host === suf || host.endsWith(suf),
-    );
+    return ALLOWED_HOST_ENTRIES.some((entry) => {
+      if (entry.startsWith(".")) {
+        const bare = entry.slice(1);
+        return host === bare || host.endsWith(entry);
+      }
+      return host === entry;
+    });
   } catch {
     return false;
   }
