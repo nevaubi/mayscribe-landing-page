@@ -1116,6 +1116,23 @@ export function EmrDashboard() {
                             dictationTargetRef.current === "assessment" ? "A · Assessment" :
                             "P · Plan"
                           }
+                          activeSection={dictationTargetRef.current ?? activeSoapSection}
+                          onApplyFormatted={(section, plain) => {
+                            const prev = soapRef.current[section] ?? "";
+                            setFormatUndo({ section, prev });
+                            setSoap((s) => ({ ...s, [section]: plain }));
+                            prevSoapRef.current = { ...prevSoapRef.current, [section]: plain };
+                            // Format changes reflow offsets; drop stale anchors for that section.
+                            setAnchors((cur) => cur.filter((a) => a.section !== section));
+                          }}
+                          onUndoFormat={() => {
+                            if (!formatUndo) return;
+                            const { section, prev } = formatUndo;
+                            setSoap((s) => ({ ...s, [section]: prev }));
+                            prevSoapRef.current = { ...prevSoapRef.current, [section]: prev };
+                            setFormatUndo(null);
+                          }}
+                          canUndoFormat={!!formatUndo}
                         />
                       )}
 
