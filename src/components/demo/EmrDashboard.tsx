@@ -336,7 +336,7 @@ export function EmrDashboard() {
         setLastCommitText((current) => (current === formatted ? null : current));
       }, 900);
 
-      const { spans, committedText, pendingRangeChecks } = verify(formatted, words);
+      const { spans, committedText, pendingRangeChecks, pendingRxTermsMedChecks } = verify(formatted, words);
       const insert = leadPrefix + committedText;
       const nextValue = before.slice(0, before.length - leadPrefix.length) + insert + after;
 
