@@ -172,8 +172,12 @@ export function ReviewTray({
 
   const node = (
     <div
-      className="fixed right-6 top-24 w-[380px] overflow-hidden rounded-xl border bg-white/95 pointer-events-auto flex flex-col"
+      className="fixed overflow-hidden rounded-xl border bg-white/95 pointer-events-auto flex flex-col"
       style={{
+        left: pos?.x ?? 0,
+        top: pos?.y ?? 96,
+        width: PANEL_WIDTH,
+        visibility: pos ? "visible" : "hidden",
         zIndex: 9997,
         maxHeight: "calc(100vh - 8rem)",
         fontFamily: "'Inter', sans-serif",
@@ -184,8 +188,15 @@ export function ReviewTray({
           "0 24px 64px -24px rgba(5,18,56,0.28), 0 8px 20px -12px rgba(5,18,56,0.18)",
       }}
     >
-      {/* Header */}
-      <div className="px-4 py-2 border-b border-border flex items-center justify-between flex-shrink-0">
+      {/* Header (drag handle) */}
+      <div
+        onPointerDown={onHeaderPointerDown}
+        onPointerMove={onHeaderPointerMove}
+        onPointerUp={onHeaderPointerUp}
+        onPointerCancel={onHeaderPointerUp}
+        className="px-4 py-2 border-b border-border flex items-center justify-between flex-shrink-0 select-none"
+        style={{ cursor: dragRef.current ? "grabbing" : "grab", touchAction: "none" }}
+      >
         <div className="flex items-center gap-2">
           <div className="text-[11px] font-semibold uppercase tracking-widest text-[#0D57FA]">
             Review
@@ -201,6 +212,9 @@ export function ReviewTray({
             </span>
           )}
         </div>
+        <span className="text-[9px] text-muted-foreground uppercase tracking-wider" data-no-drag={false}>
+          drag
+        </span>
       </div>
 
       {/* Formatting toggles */}
