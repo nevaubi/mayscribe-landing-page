@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { pcmInt16ToWav, concatInt16 } from "./pcmToWav";
 
 export type DictationStatus = "idle" | "connecting" | "listening" | "error";
 
@@ -8,6 +9,11 @@ export interface DGWord {
   end: number;
   confidence: number;
   punctuated_word?: string;
+}
+
+export interface BatchTranscriptResult {
+  batchText: string;
+  streamedText: string;
 }
 
 export interface UseDictationOptions {
@@ -20,6 +26,7 @@ export interface UseDictationOptions {
   onUtteranceEnd?: () => void;
   onError?: (msg: string) => void;
   onQuietStop?: () => void;
+  onBatchTranscript?: (r: BatchTranscriptResult) => void;
 }
 
 // Latency-tuned: shorter endpointing, more aggressive utterance close.
@@ -30,6 +37,8 @@ const DG_URL_PCM =
 
 const QUIET_CLOSE_MS = 2000;
 const QUIET_LEVEL_THRESHOLD = 0.025;
+// ~10 min at 16kHz mono int16 = 9.6M samples.
+const PCM_BUFFER_CAP_SAMPLES = 16000 * 60 * 10;
 
 function wordsForLedger(text: string) {
   return text
