@@ -187,7 +187,7 @@ function formatDictationInsert(rawText: string, before: string): string {
     /\n\s*$/.test(before) ||
     /[.!?]\s*$/.test(before);
   if (shouldCap) {
-    text = text.replace(/([a-z])/, (_c, ch: string) => ch.toUpperCase());
+    text = text.replace(/^([a-z])/, (_c, ch: string) => ch.toUpperCase());
   }
   // 6. Leading space if joining onto existing text.
   const startsWithPunct = /^[,.;:!?)]/.test(text);
