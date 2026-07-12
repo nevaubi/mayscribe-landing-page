@@ -155,15 +155,6 @@ function TopBar({ onBookDemo }: { onBookDemo: () => void }) {
           >
             <ArrowLeft className="h-4 w-4" /> Home
           </Link>
-          <a
-            href={PDF_URL}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[13px] font-semibold text-[color:var(--ink)]"
-            style={{ border: "1px solid var(--border-strong)" }}
-          >
-            <Download className="h-4 w-4" /> Download PDF
-          </a>
           <button
             onClick={onBookDemo}
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[13px] font-semibold text-white bg-gradient-brand shadow-btn"
@@ -837,15 +828,6 @@ function WhitepaperPage() {
               >
                 Book a demo <ArrowRight className="h-4 w-4" />
               </button>
-              <a
-                href={PDF_URL}
-                target="_blank"
-                rel="noopener"
-                className="inline-flex items-center gap-1.5 h-11 px-5 rounded-[8px] text-[14px] font-semibold text-[color:var(--ink)] bg-white"
-                style={{ border: "1px solid var(--border-strong)" }}
-              >
-                <Download className="h-4 w-4" /> Download PDF
-              </a>
             </div>
           </section>
         </article>
