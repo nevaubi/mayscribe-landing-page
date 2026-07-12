@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, MicOff } from "lucide-react";
-import { useDictation } from "./useDictation";
+import { useDictation, type DGWord } from "./useDictation";
 import { DictationStrip } from "./DictationStrip";
+import { verify, DEMO_ACTIVE_MEDS, type Span } from "./verify";
+import { TextOverlay } from "./HighlightedTextarea";
+import { ReviewTray, type HoldEntry } from "./ReviewTray";
+import { dictationAssist } from "@/lib/dictation-assist.functions";
 import {
   Search,
   Bell,
@@ -131,20 +135,62 @@ const SOAP_DEFAULTS: Record<SoapSection, string> = {
   plan: "",
 };
 
-function prepareDictationInsert(rawText: string, before: string, after: string) {
-  const text = rawText.replace(/\s+/g, " ").trim();
-  if (!text) return "";
+// Deepgram dictation-mode -> clean, EMR-ready text.
+// Preserves \n (spoken "new line" / "new paragraph") and normalizes clinical tokens.
+function normalizeMedicalTokens(text: string): string {
+  let t = text;
+  const rules: [RegExp, string][] = [
+    [/\bq\.?h\.?s\.?\b/gi, "QHS"],
+    [/\bb\.?i\.?d\.?\b/gi, "BID"],
+    [/\bt\.?i\.?d\.?\b/gi, "TID"],
+    [/\bq\.?i\.?d\.?\b/gi, "QID"],
+    [/\bprn\b/gi, "PRN"],
+    [/\bpo\b/gi, "PO"],
+    [/\biv\b/gi, "IV"],
+  ];
+  for (const [re, r] of rules) t = t.replace(re, r);
+  const unitMap: Record<string, string> = {
+    milligram: "mg", milligrams: "mg", mg: "mg",
+    microgram: "mcg", micrograms: "mcg", mcg: "mcg",
+    gram: "g", grams: "g", g: "g",
+    milliliter: "mL", milliliters: "mL", ml: "mL",
+    unit: "units", units: "units",
+  };
+  t = t.replace(
+    /(\d+(?:\.\d+)?)\s*(milligrams?|mg|micrograms?|mcg|grams?|g|milliliters?|ml|units?)\b/gi,
+    (_m, n, u) => `${n} ${unitMap[u.toLowerCase()] ?? u}`,
+  );
+  return t;
+}
 
-  const startsWithPunctuation = /^[,.;:!?)]/.test(text);
+function formatDictationInsert(rawText: string, before: string): string {
+  // 1. Collapse only spaces/tabs; preserve \n.
+  let text = rawText.replace(/[ \t]+/g, " ");
+  // 2. Trim leading/trailing spaces/tabs (not newlines).
+  text = text.replace(/^[ \t]+|[ \t]+$/g, "");
+  if (!text) return "";
+  // 3. Spacing normalization.
+  text = text.replace(/\s+([.,;:!?])/g, "$1");
+  text = text.replace(/([.,;:!?])([A-Za-z0-9])/g, "$1 $2");
+  // 4. Medical token normalization.
+  text = normalizeMedicalTokens(text);
+  // 5. Sentence casing.
+  const shouldCap =
+    before.length === 0 ||
+    /\n\s*$/.test(before) ||
+    /[.!?]\s*$/.test(before);
+  if (shouldCap) {
+    text = text.replace(/([a-z])/, (_c, ch: string) => ch.toUpperCase());
+  }
+  // 6. Leading space if joining onto existing text.
+  const startsWithPunct = /^[,.;:!?)]/.test(text);
   const endsWithOpening = /[(\[{\s]$/.test(before);
   const needsLeadingSpace =
     before.length > 0 &&
     !/\s$/.test(before) &&
-    !startsWithPunctuation &&
+    !startsWithPunct &&
     !endsWithOpening;
-  const needsTrailingSpace = after.length > 0 && !/^\s|^[,.;:!?)]/.test(after);
-
-  return `${needsLeadingSpace ? " " : ""}${text}${needsTrailingSpace ? " " : ""}`;
+  return (needsLeadingSpace ? " " : "") + text;
 }
 
 function StatusDot({ flag }: { flag: string | null }) {
@@ -169,8 +215,25 @@ export function EmrDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [interim, setInterim] = useState("");
   const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [flashSection, setFlashSection] = useState<SoapSection | null>(null);
   const [lastCommitAt, setLastCommitAt] = useState<Date | null>(null);
+
+  // Verification anchors — track holds and dismissed spans per section
+  interface Anchor {
+    id: string;
+    section: SoapSection;
+    start: number;
+    end: number;
+    span: Span;
+    rawText: string;
+    state: "hold" | "dismissed" | "resolved";
+  }
+  const [anchors, setAnchors] = useState<Anchor[]>([]);
+  const [activeHoldIndex, setActiveHoldIndex] = useState(0);
+  const [verifyStats, setVerifyStats] = useState({ checked: 0, held: 0 });
+  const [flashRange, setFlashRange] = useState<
+    { section: SoapSection; start: number; end: number } | null
+  >(null);
+  const [signPulse, setSignPulse] = useState(false);
 
   const activeSectionRef = useRef<SoapSection>("subjective");
   activeSectionRef.current = activeSoapSection;
@@ -187,6 +250,11 @@ export function EmrDashboard() {
     assessment: null,
     plan: null,
   });
+  const soapRef = useRef(soap);
+  soapRef.current = soap;
+  const anchorsRef = useRef(anchors);
+  anchorsRef.current = anchors;
+  const prevSoapRef = useRef<Record<SoapSection, string>>(soap);
 
   const syncCaretFromElement = useCallback((el: HTMLTextAreaElement) => {
     const section = el.dataset.soapSection as SoapSection | undefined;
@@ -210,23 +278,93 @@ export function EmrDashboard() {
     }
   }, [syncCaretFromElement]);
 
-  const commitFinal = useCallback((text: string) => {
-    const section = dictationTargetRef.current || activeSectionRef.current;
-    setInterim("");
-    setSoap((prev) => {
-      const current = prev[section] ?? "";
+  const openHolds = useMemo(
+    () => anchors.filter((a) => a.state === "hold"),
+    [anchors],
+  );
+
+  const holdEntries: HoldEntry[] = useMemo(
+    () =>
+      openHolds.map((a) => ({
+        anchorId: a.id,
+        section: a.section,
+        span: a.span,
+        start: a.start,
+        end: a.end,
+        rawText: a.rawText,
+      })),
+    [openHolds],
+  );
+
+  const commitFinal = useCallback(
+    (text: string, words: DGWord[], meta: { speechFinal: boolean }) => {
+      const section = dictationTargetRef.current || activeSectionRef.current;
+      setInterim("");
+      const current = soapRef.current[section] ?? "";
       const caret = Math.min(
         Math.max(0, caretRef.current[section] ?? current.length),
         current.length,
       );
-      const before = current.slice(0, caret);
+      let before = current.slice(0, caret);
       const after = current.slice(caret);
-      const insert = prepareDictationInsert(text, before, after);
-      if (!insert) return prev;
-      const nextValue = before + insert + after;
+
+      // Sentence-close prior committed text if utterance is finished
+      let leadPrefix = "";
+      if (meta.speechFinal && /[A-Za-z0-9]$/.test(before)) {
+        leadPrefix = ".";
+        before = before + leadPrefix;
+      }
+
+      const formatted = formatDictationInsert(text, before);
+      if (!formatted) return;
+
+      const { spans, committedText } = verify(formatted, words);
+      const insert = leadPrefix + committedText;
+      const nextValue = before.slice(0, before.length - leadPrefix.length) + insert + after;
+
+      // Build anchors for holds
+      const insertOffset = caret; // where committedText starts in section (after leadPrefix)
+      const holdSpans = spans.filter((s) => s.status === "hold");
+      const newAnchors: Anchor[] = holdSpans.map((s) => ({
+        id: s.id,
+        section,
+        // committedText has same length as formatted (placeholders replace 1:1)
+        start: insertOffset + leadPrefix.length + s.start,
+        end: insertOffset + leadPrefix.length + s.end,
+        span: s,
+        rawText: s.text,
+        state: "hold",
+      }));
+
+      // Shift existing anchors past caret by insert length
+      const shiftAmount = insert.length;
+      const updatedAnchors = anchorsRef.current.map((a) =>
+        a.section === section && a.start >= caret
+          ? { ...a, start: a.start + shiftAmount, end: a.end + shiftAmount }
+          : a,
+      );
+
       const nextCaret = caret + insert.length;
       caretRef.current[section] = nextCaret;
-      // restore focus/caret after React paints the controlled textarea value
+
+      setSoap((prev) => ({ ...prev, [section]: nextValue }));
+      prevSoapRef.current = { ...prevSoapRef.current, [section]: nextValue };
+      setAnchors([...updatedAnchors, ...newAnchors]);
+      setVerifyStats((s) => ({
+        checked: s.checked + spans.length,
+        held: s.held + holdSpans.length,
+      }));
+
+      // Range flash on committed (non-hold) portion
+      setFlashRange({
+        section,
+        start: insertOffset + leadPrefix.length,
+        end: insertOffset + leadPrefix.length + committedText.length,
+      });
+      setLastCommitAt(new Date());
+      window.setTimeout(() => setFlashRange(null), 600);
+
+      // Restore caret
       window.requestAnimationFrame(() => {
         const el = textareaRefs.current[section];
         if (el) {
@@ -235,18 +373,105 @@ export function EmrDashboard() {
           el.selectionEnd = nextCaret;
         }
       });
-      return { ...prev, [section]: nextValue };
-    });
-    setFlashSection(section);
-    setLastCommitAt(new Date());
-    window.setTimeout(() => {
-      setFlashSection((s: SoapSection | null) => (s === section ? null : s));
-    }, 600);
-  }, []);
+
+      // Async Gemini assist — may upgrade commits to holds within 2s
+      const deterministicSpans = spans.map((s) => ({
+        text: s.text,
+        start: s.start,
+        end: s.end,
+        type: s.type,
+        status: s.status,
+        candidates: s.candidates,
+        reason: s.reason,
+      }));
+      void dictationAssist({
+        data: {
+          transcript: formatted,
+          spans: deterministicSpans,
+          activeMeds: DEMO_ACTIVE_MEDS,
+        },
+      })
+        .then((r) => {
+          if (!r || !("ok" in r) || !r.ok) return;
+          const result = r.result as {
+            spans?: Array<{
+              text: string;
+              start: number;
+              end: number;
+              type: string;
+              needsReview?: boolean;
+              candidates?: string[];
+              reason?: string;
+            }>;
+          };
+          const gspans = result.spans ?? [];
+          // Only apply new holds Gemini added inside its own window that aren't already held
+          for (const g of gspans) {
+            if (!g.needsReview) continue;
+            const already = anchorsRef.current.some(
+              (a) =>
+                a.section === section &&
+                a.start === insertOffset + leadPrefix.length + g.start &&
+                a.end === insertOffset + leadPrefix.length + g.end,
+            );
+            if (already) continue;
+            // Splice text back to placeholder
+            const absStart = insertOffset + leadPrefix.length + g.start;
+            const absEnd = insertOffset + leadPrefix.length + g.end;
+            const sectionText = soapRef.current[section] ?? "";
+            if (absEnd > sectionText.length) continue;
+            const placeholder = "_".repeat(Math.max(1, absEnd - absStart));
+            const nextText =
+              sectionText.slice(0, absStart) + placeholder + sectionText.slice(absEnd);
+            setSoap((prev) => ({ ...prev, [section]: nextText }));
+            prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+            const newSpan: Span = {
+              id: `gem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              text: g.text,
+              start: g.start,
+              end: g.end,
+              type: "med",
+              status: "hold",
+              candidates: g.candidates ?? [g.text],
+              reason: g.reason ?? "Assist review",
+              minConfidence: 1,
+            };
+            setAnchors((prev) => [
+              ...prev,
+              {
+                id: newSpan.id,
+                section,
+                start: absStart,
+                end: absEnd,
+                span: newSpan,
+                rawText: g.text,
+                state: "hold",
+              },
+            ]);
+            setVerifyStats((s) => ({ checked: s.checked, held: s.held + 1 }));
+          }
+        })
+        .catch(() => {
+          // 2s timeout or bad JSON — silent, deterministic result unchanged
+        });
+    },
+    [],
+  );
 
   const dictation = useDictation({
     onInterim: (t) => setInterim(t),
-    onFinal: (t) => commitFinal(t),
+    onFinal: (t, w, meta) => commitFinal(t, w, meta),
+    onUtteranceEnd: () => {
+      // Sentence-close on utterance end
+      const section = dictationTargetRef.current;
+      const current = soapRef.current[section] ?? "";
+      if (/[A-Za-z0-9]$/.test(current)) {
+        const nextText = current + ".";
+        setSoap((prev) => ({ ...prev, [section]: nextText }));
+        prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+        caretRef.current[section] = nextText.length;
+      }
+    },
     onError: () => setInterim(""),
   });
 
@@ -277,6 +502,150 @@ export function EmrDashboard() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleDictation]);
+
+  // Confirm / dismiss handlers used by ReviewTray + tray keybindings.
+  const confirmHold = useCallback((anchorId: string, choice: string) => {
+    const anchor = anchorsRef.current.find((a) => a.id === anchorId);
+    if (!anchor) return;
+    if (choice === "(dismiss)") {
+      // treat as dismiss
+      setAnchors((prev) =>
+        prev.map((a) => (a.id === anchorId ? { ...a, state: "resolved" } : a)),
+      );
+      setVerifyStats((s) => ({ ...s, held: Math.max(0, s.held - 1) }));
+      return;
+    }
+    const section = anchor.section;
+    const current = soapRef.current[section] ?? "";
+    const nextText =
+      current.slice(0, anchor.start) + choice + current.slice(anchor.end);
+    const delta = choice.length - (anchor.end - anchor.start);
+    setSoap((prev) => ({ ...prev, [section]: nextText }));
+    prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+    setAnchors((prev) =>
+      prev.map((a) => {
+        if (a.id === anchorId) {
+          return { ...a, state: "resolved", end: a.start + choice.length };
+        }
+        if (a.section === section && a.start > anchor.start) {
+          return { ...a, start: a.start + delta, end: a.end + delta };
+        }
+        return a;
+      }),
+    );
+    setVerifyStats((s) => ({ ...s, held: Math.max(0, s.held - 1) }));
+  }, []);
+
+  const dismissHold = useCallback((anchorId: string) => {
+    const anchor = anchorsRef.current.find((a) => a.id === anchorId);
+    if (!anchor) return;
+    // Replace placeholder with raw transcript, mark dismissed for amber underline
+    const section = anchor.section;
+    const current = soapRef.current[section] ?? "";
+    const nextText =
+      current.slice(0, anchor.start) + anchor.rawText + current.slice(anchor.end);
+    const delta = anchor.rawText.length - (anchor.end - anchor.start);
+    setSoap((prev) => ({ ...prev, [section]: nextText }));
+    prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+    setAnchors((prev) =>
+      prev.map((a) => {
+        if (a.id === anchorId) {
+          return {
+            ...a,
+            state: "dismissed",
+            end: a.start + anchor.rawText.length,
+          };
+        }
+        if (a.section === section && a.start > anchor.start) {
+          return { ...a, start: a.start + delta, end: a.end + delta };
+        }
+        return a;
+      }),
+    );
+    setVerifyStats((s) => ({ ...s, held: Math.max(0, s.held - 1) }));
+  }, []);
+
+  // Global keys while tray open
+  useEffect(() => {
+    if (openHolds.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === "INPUT" || target.tagName === "SELECT")) return;
+      const active = openHolds[activeHoldIndex];
+      if (!active) return;
+      if (e.key === "1" || e.key === "2" || e.key === "3") {
+        const idx = parseInt(e.key, 10) - 1;
+        const c = active.span.candidates[idx];
+        if (c) {
+          e.preventDefault();
+          confirmHold(active.id, c);
+        }
+      } else if (e.key === "Enter" && !e.shiftKey && !e.metaKey) {
+        // If focus is in textarea, don't hijack
+        if (target?.tagName === "TEXTAREA") return;
+        const c = active.span.candidates[0];
+        if (c) {
+          e.preventDefault();
+          confirmHold(active.id, c);
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        dismissHold(active.id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openHolds, activeHoldIndex, confirmHold, dismissHold]);
+
+  // Reset active hold pointer when holds change
+  useEffect(() => {
+    if (activeHoldIndex >= openHolds.length) {
+      setActiveHoldIndex(0);
+    }
+  }, [openHolds.length, activeHoldIndex]);
+
+  // Sign pulse when last hold clears
+  const prevOpenCountRef = useRef(0);
+  useEffect(() => {
+    if (prevOpenCountRef.current > 0 && openHolds.length === 0) {
+      setSignPulse(true);
+      const t = window.setTimeout(() => setSignPulse(false), 800);
+      return () => clearTimeout(t);
+    }
+    prevOpenCountRef.current = openHolds.length;
+  }, [openHolds.length]);
+
+  // Manual-edit anchor tracking: when the user edits a textarea by hand,
+  // shift anchors past the edit point by the length delta.
+  const handleManualEdit = useCallback(
+    (section: SoapSection, newValue: string) => {
+      const prev = prevSoapRef.current[section] ?? "";
+      if (prev === newValue) return;
+      // Find common prefix
+      let p = 0;
+      const minLen = Math.min(prev.length, newValue.length);
+      while (p < minLen && prev[p] === newValue[p]) p++;
+      const delta = newValue.length - prev.length;
+      // Remove or shift anchors intersecting the edited region
+      setAnchors((cur) =>
+        cur
+          .map((a) => {
+            if (a.section !== section) return a;
+            if (a.end <= p) return a; // before edit
+            if (a.start >= p) {
+              return { ...a, start: a.start + delta, end: a.end + delta };
+            }
+            // intersects — invalidate this anchor
+            return null;
+          })
+          .filter((a): a is Anchor => a !== null),
+      );
+      prevSoapRef.current = { ...prevSoapRef.current, [section]: newValue };
+    },
+    [],
+  );
+
+
 
   const draftTime = (lastCommitAt ?? new Date(2026, 6, 12, 9, 41))
     .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -537,47 +906,75 @@ export function EmrDashboard() {
                       {(["subjective", "objective", "assessment", "plan"] as const).map(section => {
                         const isActive = activeSoapSection === section;
                         const isListening = isActive && status === "listening";
-                        const isFlashing = flashSection === section;
+                        const sectionHolds = anchors
+                          .filter((a) => a.section === section && a.state === "hold")
+                          .map((a) => ({ start: a.start, end: a.end, span: a.span }));
+                        const sectionDismissed = anchors
+                          .filter((a) => a.section === section && a.state === "dismissed")
+                          .map((a) => ({ start: a.start, end: a.end, span: a.span }));
+                        const flashForSection =
+                          flashRange && flashRange.section === section
+                            ? { start: flashRange.start, end: flashRange.end }
+                            : null;
+                        const activeHold = openHolds[activeHoldIndex];
+                        const activeHoldId =
+                          activeHold && activeHold.section === section
+                            ? activeHold.id
+                            : null;
                         return (
-                          <textarea
+                          <div
                             key={section}
-                            ref={(el) => { textareaRefs.current[section] = el; }}
-                            data-soap-section={section}
-                            className={`w-full resize-none p-4 text-xs leading-relaxed font-mono text-foreground focus:outline-none border-none transition-colors ${
-                              isActive ? "block" : "hidden"
-                            } ${isListening ? "ring-2 ring-inset ring-[#0D57FA]" : ""}`}
-                            rows={12}
-                            style={{
-                              fontFamily: "'JetBrains Mono', monospace",
-                              fontSize: "11.5px",
-                              lineHeight: "1.7",
-                              backgroundColor: isFlashing ? "#EEF4FC" : "transparent",
-                              transition: "background-color 600ms ease",
-                            }}
-                            placeholder="Press F2 or click the mic to dictate."
-                            value={soap[section]}
-                            onChange={e => {
-                              setSoap(prev => ({ ...prev, [section]: e.target.value }));
-                              syncCaretFromElement(e.target);
-                            }}
-                            onSelect={e => {
-                              syncCaretFromElement(e.target as HTMLTextAreaElement);
-                            }}
-                            onFocus={e => {
-                              syncCaretFromElement(e.target);
-                            }}
-                            onKeyUp={e => {
-                              syncCaretFromElement(e.target as HTMLTextAreaElement);
-                            }}
-                            onClick={e => {
-                              syncCaretFromElement(e.target as HTMLTextAreaElement);
-                            }}
-                            onBlur={e => {
-                              caretRef.current[section] = e.target.selectionStart ?? e.target.value.length;
-                            }}
-                          />
+                            className={`relative ${isActive ? "block" : "hidden"}`}
+                          >
+                            <TextOverlay
+                              value={soap[section]}
+                              holds={sectionHolds}
+                              dismissed={sectionDismissed}
+                              flashRange={flashForSection}
+                              activeHoldId={activeHoldId}
+                            />
+                            <textarea
+                              ref={(el) => { textareaRefs.current[section] = el; }}
+                              data-soap-section={section}
+                              className={`relative w-full resize-none p-4 text-xs leading-relaxed focus:outline-none border-none bg-transparent ${
+                                isListening ? "ring-2 ring-inset ring-[#0D57FA]" : ""
+                              }`}
+                              rows={12}
+                              style={{
+                                fontFamily: "'JetBrains Mono', monospace",
+                                fontSize: "11.5px",
+                                lineHeight: "1.7",
+                                color: "#0B1F52",
+                              }}
+                              placeholder="Press F2 or click the mic to dictate."
+                              value={soap[section]}
+                              onChange={e => {
+                                const v = e.target.value;
+                                setSoap(prev => ({ ...prev, [section]: v }));
+                                handleManualEdit(section, v);
+                                syncCaretFromElement(e.target);
+                              }}
+                              onSelect={e => syncCaretFromElement(e.target as HTMLTextAreaElement)}
+                              onFocus={e => syncCaretFromElement(e.target)}
+                              onKeyUp={e => syncCaretFromElement(e.target as HTMLTextAreaElement)}
+                              onClick={e => syncCaretFromElement(e.target as HTMLTextAreaElement)}
+                              onBlur={e => {
+                                caretRef.current[section] = e.target.selectionStart ?? e.target.value.length;
+                              }}
+                            />
+                          </div>
                         );
                       })}
+
+                      {/* Floating section caption while dictating */}
+                      {status === "listening" && (
+                        <div
+                          className="pointer-events-none absolute top-2 right-3 z-30 rounded-md border bg-white/95 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider shadow-sm"
+                          style={{ borderColor: "#D8E2F0", color: "#0D57FA" }}
+                        >
+                          Section: {dictationTargetRef.current}
+                        </div>
+                      )}
 
                       <DictationStrip
                         status={status}
@@ -594,21 +991,46 @@ export function EmrDashboard() {
                       />
                     </div>
 
+                    {/* Review Tray */}
+                    {holdEntries.length > 0 && (
+                      <ReviewTray
+                        holds={holdEntries}
+                        activeIndex={activeHoldIndex}
+                        onSelect={(idx) => setActiveHoldIndex(idx)}
+                        onConfirm={(id, choice) => confirmHold(id, choice)}
+                        onDismiss={(id) => dismissHold(id)}
+                      />
+                    )}
+
                     <div className="px-4 py-2.5 border-t border-border bg-[#F8FAFC] flex items-center justify-between">
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                         <Info className="w-3.5 h-3.5 text-[#1B4F8A]" />
                         Auto-saved {draftTime} · Chen, Sarah L., MD
+                        {verifyStats.checked > 0 && (
+                          <span className="ml-2 text-[10px] text-[#7A8AAC]">
+                            · {verifyStats.checked} verified{verifyStats.held > 0 ? ` · ${verifyStats.held} held` : ""}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded hover:bg-muted transition-colors">
                           <Save className="w-3.5 h-3.5" /> Save Draft
                         </button>
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#1B4F8A] text-white rounded hover:bg-[#153F70] transition-colors font-medium">
+                        <button
+                          disabled={openHolds.length > 0}
+                          title={openHolds.length > 0 ? `${openHolds.length} item${openHolds.length === 1 ? "" : "s"} need review` : ""}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded transition-all font-medium ${
+                            openHolds.length > 0
+                              ? "bg-slate-300 text-white cursor-not-allowed"
+                              : `bg-[#1B4F8A] text-white hover:bg-[#153F70] ${signPulse ? "ring-2 ring-[#0D57FA] ring-offset-1" : ""}`
+                          }`}
+                        >
                           <Send className="w-3.5 h-3.5" /> Sign & Submit
                         </button>
                       </div>
                     </div>
                   </div>
+
 
                 </div>
 
