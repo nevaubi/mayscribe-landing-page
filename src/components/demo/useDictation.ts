@@ -218,15 +218,14 @@ export function useDictation(opts: UseDictationOptions = {}) {
 
     socket.onclose = (ev) => {
       if (stoppingRef.current) return;
-      // 1008 policy violation / 4001 unauthorized ≈ token issue
       if (ev.code === 1008 || ev.code === 4001 || ev.code === 4008) {
         setExpired(true);
         fail("Session expired — press F2 to resume");
-      } else if (status === "listening" || status === "connecting") {
-        // unexpected close
-        setStatus("idle");
-        cleanup();
+        return;
       }
+      // unexpected close
+      cleanup();
+      setStatus("idle");
     };
   }, [cleanup, fail, status]);
 
