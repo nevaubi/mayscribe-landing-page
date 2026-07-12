@@ -9,6 +9,7 @@ import { dictationAssist } from "@/lib/dictation-assist.functions";
 import {
   getStrengthsAndForms,
   checkDoseAgainstStrengths,
+  searchRxTerms,
   type Strength,
 } from "./lookupClient";
 import {
