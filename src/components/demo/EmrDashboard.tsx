@@ -3,10 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDictation, type DGWord } from "./useDictation";
 import { DictationStrip } from "./DictationStrip";
 import { verify, DEMO_ACTIVE_MEDS, type Span } from "./verify";
-import { TextOverlay, type MedMatch } from "./HighlightedTextarea";
 import { ReviewTray, type HoldEntry } from "./ReviewTray";
 import { QuickLookup, type QuickLookupHandle } from "./QuickLookup";
-import { detectAll } from "./lexicon";
 import { dictationAssist } from "@/lib/dictation-assist.functions";
 import {
   Search,
