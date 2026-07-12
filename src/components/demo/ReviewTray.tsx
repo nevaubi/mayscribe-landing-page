@@ -15,6 +15,7 @@ interface Props {
   onSelect: (index: number) => void;
   onConfirm: (anchorId: string, choice: string) => void;
   onDismiss: (anchorId: string) => void;
+  onLookup?: (query: string) => void;
 }
 
 const SECTION_LABELS: Record<HoldEntry["section"], string> = {
