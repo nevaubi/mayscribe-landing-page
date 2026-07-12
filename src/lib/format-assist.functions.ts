@@ -5,17 +5,28 @@ const InputSchema = z.object({
   text: z.string(),
   toggles: z.object({
     spelling: z.boolean(),
-    structure: z.boolean(),
+    autoFormat: z.boolean(),
+    doseUnits: z.boolean(),
   }),
 });
 
-const SYSTEM_PROMPT = `You reformat clinical note text. Fix ordinary English spelling, spacing, and whitespace/casing errors. You may reorganize into paragraphs, hyphen bullet lists when the text enumerates items, and UPPERCASE header lines for clear subsections, and you may wrap genuinely critical values in **double asterisks**. You must preserve every number, unit, medication name, dose, negation word, and laterality term exactly as given (whitespace/case around units may be normalized, e.g. "5mg" -> "5 mg"). Never add, remove, or reword clinical content. Return JSON { "formatted": string }.`;
+const SYSTEM_PROMPT = `You reformat clinical note text. You must return strict JSON of shape:
+{ "formatted": string, "doseChanges": [{ "before": string, "after": string }] }
+
+Rules:
+- "formatted" contains the note after applying whichever of these are enabled:
+  * spelling: fix ordinary English spelling, spacing, whitespace, punctuation, and casing errors.
+  * autoFormat: reorganize into paragraphs, hyphen bullet lists, and UPPERCASE header lines where appropriate. You may wrap genuinely critical values in **double asterisks**.
+- "formatted" MUST preserve every dose-unit word (milligrams, micrograms, milliliters, units, mEq, mmol, IU, %, mmHg, bpm, and their abbreviations mg / mcg / mL / g / kg) EXACTLY as they appear in the input. Do NOT abbreviate or expand them in "formatted".
+- If doseUnits is enabled, list every proposed dosage-unit normalization in "doseChanges" (e.g. { "before": "10 milligrams", "after": "10 mg" }). Include the number and unit exactly as they appear in "formatted". Only include dosage measurements attached to a number. Do not propose changes to route/frequency abbreviations or lab shorthand. If doseUnits is disabled, "doseChanges" must be an empty array.
+- Never invent medications, numbers, doses, negations, or laterality terms not present in the input.
+- Preserve line breaks in "formatted" using \\n.`;
 
 async function callFireworks(
   key: string,
   userContent: string,
   signal: AbortSignal,
-): Promise<string | null> {
+): Promise<{ formatted: string; doseChanges: { before: string; after: string }[] } | null> {
   const res = await fetch(
     "https://api.fireworks.ai/inference/v1/chat/completions",
     {
@@ -31,8 +42,6 @@ async function callFireworks(
         max_tokens: 4096,
         top_k: 40,
         temperature: 0,
-        presence_penalty: 0,
-        frequency_penalty: 0,
         reasoning_effort: "none",
         response_format: { type: "json_object" },
         messages: [
@@ -52,9 +61,27 @@ async function callFireworks(
   const content = j.choices?.[0]?.message?.content;
   if (!content) return null;
   try {
-    const parsed = JSON.parse(content) as { formatted?: string };
+    const parsed = JSON.parse(content) as {
+      formatted?: string;
+      doseChanges?: unknown;
+    };
     if (typeof parsed.formatted !== "string") return null;
-    return parsed.formatted;
+    const rawChanges = Array.isArray(parsed.doseChanges) ? parsed.doseChanges : [];
+    const doseChanges: { before: string; after: string }[] = [];
+    for (const c of rawChanges) {
+      if (
+        c &&
+        typeof (c as { before?: unknown }).before === "string" &&
+        typeof (c as { after?: unknown }).after === "string"
+      ) {
+        const before = (c as { before: string }).before;
+        const after = (c as { after: string }).after;
+        if (before && after && before !== after) {
+          doseChanges.push({ before, after });
+        }
+      }
+    }
+    return { formatted: parsed.formatted, doseChanges };
   } catch {
     return null;
   }
@@ -66,34 +93,32 @@ export const formatAssist = createServerFn({ method: "POST" })
     const key = process.env.FIREWORKS_API_SECRET;
     if (!key) return { ok: false as const, reason: "no_key" };
 
-    const instructions: string[] = [];
-    if (data.toggles.spelling)
-      instructions.push(
-        "Fix spelling of ordinary English words and correct any spacing, whitespace, or casing errors.",
-      );
-    if (data.toggles.structure)
-      instructions.push(
-        "Reorganize into paragraphs, hyphen bullet lists, and UPPERCASE header lines where appropriate. Wrap genuinely critical values in **double asterisks**.",
-      );
-    if (instructions.length === 0)
+    if (!data.toggles.spelling && !data.toggles.autoFormat && !data.toggles.doseUnits) {
       return { ok: false as const, reason: "no_toggles" };
+    }
 
-    const userContent = JSON.stringify({ instructions, text: data.text });
+    const userContent = JSON.stringify({
+      instructions: {
+        spelling: data.toggles.spelling,
+        autoFormat: data.toggles.autoFormat,
+        doseUnits: data.toggles.doseUnits,
+      },
+      text: data.text,
+    });
 
-    // 6s timeout, single retry on network/5xx/parse failure.
     for (let attempt = 0; attempt < 2; attempt++) {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 6000);
       try {
-        const formatted = await callFireworks(
-          key,
-          userContent,
-          controller.signal,
-        );
+        const result = await callFireworks(key, userContent, controller.signal);
         clearTimeout(t);
-        if (formatted != null)
-          return { ok: true as const, formatted };
-        // parse fail — retry once
+        if (result != null) {
+          return {
+            ok: true as const,
+            formatted: result.formatted,
+            doseChanges: result.doseChanges,
+          };
+        }
       } catch (e) {
         clearTimeout(t);
         if (attempt === 1) {
