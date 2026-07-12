@@ -122,7 +122,9 @@ const TABS = [
   { id: "orders", label: "Orders", icon: ClipboardList },
 ];
 
-const SOAP_DEFAULTS = {
+type SoapSection = "subjective" | "objective" | "assessment" | "plan";
+
+const SOAP_DEFAULTS: Record<SoapSection, string> = {
   subjective: "",
   objective: "",
   assessment: "",
