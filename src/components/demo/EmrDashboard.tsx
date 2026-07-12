@@ -890,42 +890,15 @@ export function EmrDashboard() {
                     <div className="p-0 relative">
                       {(["subjective", "objective", "assessment", "plan"] as const).map(section => {
                         const isActive = activeSoapSection === section;
-                        const isListening = isActive && status === "listening";
-                        const sectionHolds = anchors
-                          .filter((a) => a.section === section && a.state === "hold")
-                          .map((a) => ({ start: a.start, end: a.end, span: a.span }));
-                        const sectionDismissed = anchors
-                          .filter((a) => a.section === section && a.state === "dismissed")
-                          .map((a) => ({ start: a.start, end: a.end, span: a.span }));
-                        const flashForSection =
-                          flashRange && flashRange.section === section
-                            ? { start: flashRange.start, end: flashRange.end }
-                            : null;
-                        const activeHold = openHolds[activeHoldIndex];
-                        const activeHoldId =
-                          activeHold && activeHold.section === section
-                            ? activeHold.id
-                            : null;
                         return (
                           <div
                             key={section}
                             className={`relative ${isActive ? "block" : "hidden"}`}
                           >
-                            <TextOverlay
-                              value={soap[section]}
-                              holds={sectionHolds}
-                              dismissed={sectionDismissed}
-                              flashRange={flashForSection}
-                              activeHoldId={activeHoldId}
-                              medMatches={medMatchesBySection[section]}
-                              onMedClick={(name) => handleLookup(name)}
-                            />
                             <textarea
                               ref={(el) => { textareaRefs.current[section] = el; }}
                               data-soap-section={section}
-                              className={`relative w-full resize-none p-4 text-xs leading-relaxed focus:outline-none border-none bg-transparent ${
-                                isListening ? "ring-2 ring-inset ring-[#0D57FA]" : ""
-                              }`}
+                              className="relative w-full resize-none p-4 text-xs leading-relaxed focus:outline-none border-none bg-transparent"
                               rows={12}
                               style={{
                                 fontFamily: "'JetBrains Mono', monospace",
@@ -933,7 +906,7 @@ export function EmrDashboard() {
                                 lineHeight: "1.7",
                                 color: "#0B1F52",
                               }}
-                              placeholder="Press F2 or click the mic to dictate."
+                              placeholder="Press F2 to dictate."
                               value={soap[section]}
                               onChange={e => {
                                 const v = e.target.value;
@@ -952,16 +925,6 @@ export function EmrDashboard() {
                           </div>
                         );
                       })}
-
-                      {/* Floating section caption while dictating */}
-                      {status === "listening" && (
-                        <div
-                          className="pointer-events-none absolute top-2 right-3 z-30 rounded-md border bg-white/95 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider shadow-sm"
-                          style={{ borderColor: "#D8E2F0", color: "#0D57FA" }}
-                        >
-                          Section: {dictationTargetRef.current}
-                        </div>
-                      )}
 
                       <DictationStrip
                         status={status}
