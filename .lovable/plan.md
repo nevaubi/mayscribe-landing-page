@@ -1,41 +1,23 @@
 ## Plan
 
-### 1. Slim, smoother floating dictation strip
-- Reduce width from 760px to ~520px (still `min()` with viewport).
-- Tighten paddings, shrink waveform to ~10 bars, remove the redundant preview text box (interim text will now live in the Review popup instead).
-- Keep only: status dot + label + elapsed, section chip, compact waveform, quiet countdown, close button.
-- Smooth waveform: interpolate `audioLevel` with a small RAF-driven eased value so bars don't jitter; add subtle opacity/height easing.
+### 1. Stop the "Quiet Ns" pill from resizing the dictation strip
+In `src/components/demo/DictationStrip.tsx`, reserve fixed space for the quiet countdown instead of conditionally mounting the pill:
+- Always render a fixed-width slot (e.g. `width: 68px`, right-aligned) between the waveform and the close button.
+- Toggle only the pill's `opacity` (0 ↔ 1) and inner content based on `quietCountdown != null`.
+- Same treatment for the error text slot so error state doesn't reflow either — cap it in a fixed-width container with `truncate`.
+Result: card width stays constant across idle/listening/quiet/error states.
 
-### 2. Move the full transcript into the Review popup
-- Redesign `ReviewTray` (rename conceptually to "Review Panel", same file) into a two-part popup:
-  - **Top:** full committed + interim transcript rendered as rich text. Words/phrases flagged by `verify()` get inline highlights (amber for holds, blue dotted for meds) directly in this panel only.
-  - **Bottom:** the existing per-hold action cards (candidates, Lookup, Dismiss).
-- Highlights are rendered here from `spans` offsets — no overlay in the EMR textarea.
-- Remove `HighlightedTextarea` mirror-overlay usage from `EmrDashboard`; the SOAP fields become plain textareas again. Keep `HighlightedTextarea` file but stop importing it (or swap to plain `<Textarea>`).
+### 2. Make the Review popup draggable
+In `src/components/demo/ReviewTray.tsx`:
+- Replace the current `fixed right-6 top-24` positioning with a stateful `{ x, y }` position stored in `useState`, initialized to the current top-right anchor (computed from `window.innerWidth - 380 - 24`, `96`).
+- Add a drag handle: the existing header row (the `Review` + section chip + count bar) gets `cursor-grab` / `active:cursor-grabbing` and `onPointerDown`.
+- On `pointerdown` capture the pointer, record offset; on `pointermove` update `{ x, y }`; on `pointerup` release. Clamp to viewport bounds so the card can't be dragged fully offscreen (keep at least 40px visible on each side).
+- Buttons inside the header (none currently, but future-proof) get `data-no-drag` and the handler bails if `e.target.closest('[data-no-drag]')`.
+- Persist position in `useRef` only (no localStorage) — resets per session, matches the ephemeral nature of the panel.
+- Keep everything else (formatting toggles, transcript, hold cards, portal, z-index) unchanged.
 
-### 3. Smarter number/age vs dose classification
-- Update `lexicon.ts` `detectAll` (and dose regex) so a numeric token is only classified as `dose` when:
-  - it's followed by a real dose unit (`mg`, `mcg`, `g`, `mL`, `units`, `IU`, `%`, `mg/kg`, etc.), OR
-  - it's within a short window after a known medication name.
-- Add an `age/quantity` classifier that recognizes patterns like `<n> year[s] old`, `age <n>`, `<n> years`, `<n> days`, `<n> weeks`, `<n> months`, `x<n>`, `<n> times`, `<n> episodes`. These are excluded from med/dose verification entirely (never produce a "not a prescription" style flag).
-- In `verify.ts`, guard: a `low_confidence` hold is only created for numeric spans that are actual doses (unit-bearing or med-adjacent). Standalone numbers get no hold.
+### Files touched
+- `src/components/demo/DictationStrip.tsx` — fixed-width slots for quiet countdown + error.
+- `src/components/demo/ReviewTray.tsx` — draggable header, position state, pointer handlers, viewport clamping.
 
-### 4. Formatting options in the Review popup (non-destructive)
-- Add a small "Formatting" strip at the top of the Review popup with clickable, toggleable chips that reformat the transcript view without changing the raw words:
-  - **Punctuation polish** — sentence casing, terminal periods, comma spacing.
-  - **Numbers & units** — `10mg` → `10 mg`, `bid` → `BID`, `q6h` normalized.
-  - **Section casing** — first letter of each sentence uppercase.
-  - **Original** — revert to raw dictated text.
-- These operate on a display copy only. Committing to the SOAP field happens on Enter/confirm, and the SOAP textarea receives the currently displayed formatted string (still no word substitutions — only whitespace, punctuation, casing).
-- Each chip toggles independently; "Original" clears all toggles.
-
-### 5. Wiring / cleanup
-- `EmrDashboard`: pass `interim` + full section text + spans into the Review popup; keep textareas plain.
-- `useDictation`: no logic change beyond exposing the same interim string to the Review popup (already available).
-- Ensure the Review popup only mounts when there is either an active dictation session or at least one hold — otherwise stays hidden.
-
-### Technical notes
-
-- Files touched: `src/components/demo/DictationStrip.tsx`, `src/components/demo/ReviewTray.tsx`, `src/components/demo/EmrDashboard.tsx`, `src/components/demo/lexicon.ts`, `src/components/demo/verify.ts`. New helper `src/components/demo/format-options.ts` for the reversible formatting toggles.
-- No backend changes; Gemini assist call remains as-is.
-- No changes to `useDictation` streaming logic or auto-quiet-stop.
+No changes to dictation logic, verification, or EMR wiring.

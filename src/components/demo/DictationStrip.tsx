@@ -193,20 +193,28 @@ export function DictationStrip({
             })}
           </div>
 
-          {quietCountdown != null && (
+          {/* Fixed-width slot: quiet countdown OR error message. Prevents reflow. */}
+          <div
+            className="flex items-center justify-center flex-shrink-0"
+            style={{ width: 72 }}
+          >
             <div
-              className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-              style={{ color: "#8A6116", background: "#FFF7E6", border: "1px solid #F2E8C8" }}
+              className="text-[10px] font-medium px-2 py-0.5 rounded-full truncate max-w-full text-center"
+              style={{
+                color: showError ? "#B42318" : "#8A6116",
+                background: showError ? "#FEF2F2" : "#FFF7E6",
+                border: `1px solid ${showError ? "#FECACA" : "#F2E8C8"}`,
+                opacity: quietCountdown != null || (showError && errorMessage) ? 1 : 0,
+                transition: "opacity 150ms ease",
+              }}
             >
-              Quiet {quietCountdown}s
+              {showError && errorMessage
+                ? errorMessage
+                : quietCountdown != null
+                  ? `Quiet ${quietCountdown}s`
+                  : "\u00A0"}
             </div>
-          )}
-
-          {showError && errorMessage && (
-            <div className="text-[10px] max-w-[180px] truncate" style={{ color: "#B42318" }}>
-              {errorMessage}
-            </div>
-          )}
+          </div>
 
           <button
             onClick={onStop}
