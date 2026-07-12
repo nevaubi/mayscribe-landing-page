@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Mic, MicOff } from "lucide-react";
+
 import { useDictation, type DGWord } from "./useDictation";
 import { DictationStrip } from "./DictationStrip";
 import { verify, DEMO_ACTIVE_MEDS, type Span } from "./verify";
-import { TextOverlay, type MedMatch } from "./HighlightedTextarea";
 import { ReviewTray, type HoldEntry } from "./ReviewTray";
 import { QuickLookup, type QuickLookupHandle } from "./QuickLookup";
-import { detectAll } from "./lexicon";
 import { dictationAssist } from "@/lib/dictation-assist.functions";
 import {
   Search,
@@ -263,26 +261,6 @@ export function EmrDashboard() {
     quickLookupRef.current?.openWith(q);
   }, []);
 
-  // Compute lexicon med matches per section (memoised)
-  const medMatchesBySection = useMemo(() => {
-    const out: Record<SoapSection, MedMatch[]> = {
-      subjective: [],
-      objective: [],
-      assessment: [],
-      plan: [],
-    };
-    (Object.keys(out) as SoapSection[]).forEach((sec) => {
-      const text = soap[sec];
-      if (!text) return;
-      const detected = detectAll(text).filter((d) => d.type === "med");
-      out[sec] = detected.map((d) => ({
-        start: d.start,
-        end: d.end,
-        medName: (d.meta?.med as string) ?? d.text,
-      }));
-    });
-    return out;
-  }, [soap]);
 
   const syncCaretFromElement = useCallback((el: HTMLTextAreaElement) => {
     const section = el.dataset.soapSection as SoapSection | undefined;
@@ -861,27 +839,6 @@ export function EmrDashboard() {
                             <option>Discharge Summary</option>
                             <option>Consult Note</option>
                           </select>
-                          <button
-                            type="button"
-                            onClick={toggleDictation}
-                            aria-pressed={status === "listening"}
-                            title={status === "listening" ? "Stop dictation (F2)" : "Start dictation (F2)"}
-                            className={`h-6 w-6 rounded flex items-center justify-center border transition-colors ${
-                              status === "listening"
-                                ? "bg-[#0D57FA] border-[#0D57FA] text-white"
-                                : status === "connecting"
-                                  ? "bg-amber-50 border-amber-200 text-amber-700 animate-pulse"
-                                  : status === "error"
-                                    ? "bg-red-50 border-red-200 text-red-600"
-                                    : "bg-white border-border text-[#46587E] hover:bg-slate-50"
-                            }`}
-                          >
-                            {status === "error" && errorMessage?.startsWith("Microphone") ? (
-                              <MicOff className="w-3.5 h-3.5" />
-                            ) : (
-                              <Mic className="w-3.5 h-3.5" />
-                            )}
-                          </button>
                           {status === "error" && errorMessage?.startsWith("Microphone") && (
                             <span className="text-[10px] text-red-600 font-medium">
                               Microphone blocked — enable it in the browser bar
@@ -933,42 +890,15 @@ export function EmrDashboard() {
                     <div className="p-0 relative">
                       {(["subjective", "objective", "assessment", "plan"] as const).map(section => {
                         const isActive = activeSoapSection === section;
-                        const isListening = isActive && status === "listening";
-                        const sectionHolds = anchors
-                          .filter((a) => a.section === section && a.state === "hold")
-                          .map((a) => ({ start: a.start, end: a.end, span: a.span }));
-                        const sectionDismissed = anchors
-                          .filter((a) => a.section === section && a.state === "dismissed")
-                          .map((a) => ({ start: a.start, end: a.end, span: a.span }));
-                        const flashForSection =
-                          flashRange && flashRange.section === section
-                            ? { start: flashRange.start, end: flashRange.end }
-                            : null;
-                        const activeHold = openHolds[activeHoldIndex];
-                        const activeHoldId =
-                          activeHold && activeHold.section === section
-                            ? activeHold.id
-                            : null;
                         return (
                           <div
                             key={section}
                             className={`relative ${isActive ? "block" : "hidden"}`}
                           >
-                            <TextOverlay
-                              value={soap[section]}
-                              holds={sectionHolds}
-                              dismissed={sectionDismissed}
-                              flashRange={flashForSection}
-                              activeHoldId={activeHoldId}
-                              medMatches={medMatchesBySection[section]}
-                              onMedClick={(name) => handleLookup(name)}
-                            />
                             <textarea
                               ref={(el) => { textareaRefs.current[section] = el; }}
                               data-soap-section={section}
-                              className={`relative w-full resize-none p-4 text-xs leading-relaxed focus:outline-none border-none bg-transparent ${
-                                isListening ? "ring-2 ring-inset ring-[#0D57FA]" : ""
-                              }`}
+                              className="relative w-full resize-none p-4 text-xs leading-relaxed focus:outline-none border-none bg-transparent"
                               rows={12}
                               style={{
                                 fontFamily: "'JetBrains Mono', monospace",
@@ -976,7 +906,7 @@ export function EmrDashboard() {
                                 lineHeight: "1.7",
                                 color: "#0B1F52",
                               }}
-                              placeholder="Press F2 or click the mic to dictate."
+                              placeholder="Press F2 to dictate."
                               value={soap[section]}
                               onChange={e => {
                                 const v = e.target.value;
@@ -995,16 +925,6 @@ export function EmrDashboard() {
                           </div>
                         );
                       })}
-
-                      {/* Floating section caption while dictating */}
-                      {status === "listening" && (
-                        <div
-                          className="pointer-events-none absolute top-2 right-3 z-30 rounded-md border bg-white/95 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider shadow-sm"
-                          style={{ borderColor: "#D8E2F0", color: "#0D57FA" }}
-                        >
-                          Section: {dictationTargetRef.current}
-                        </div>
-                      )}
 
                       <DictationStrip
                         status={status}
