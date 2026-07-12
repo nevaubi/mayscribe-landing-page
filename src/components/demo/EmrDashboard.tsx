@@ -203,7 +203,7 @@ export function EmrDashboard() {
     setFlashSection(section);
     setLastCommitAt(new Date());
     window.setTimeout(() => {
-      setFlashSection((s) => (s === section ? null : s));
+      setFlashSection((s: SoapSection | null) => (s === section ? null : s));
     }, 600);
   }, []);
 
