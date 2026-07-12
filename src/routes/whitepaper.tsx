@@ -79,7 +79,7 @@ function H2({ id, children }: { id: string; children: React.ReactNode }) {
   return (
     <h2
       id={id}
-      className="scroll-mt-24 mt-14 text-[24px] md:text-[28px] font-bold tracking-[-0.01em] text-[color:var(--ink)]"
+      className="scroll-mt-24 mt-12 text-[24px] md:text-[28px] font-bold tracking-[-0.01em] text-[color:var(--ink)]"
     >
       {children}
     </h2>
@@ -90,7 +90,7 @@ function H3({ id, children }: { id: string; children: React.ReactNode }) {
   return (
     <h3
       id={id}
-      className="scroll-mt-24 mt-9 text-[17.5px] md:text-[19px] font-semibold text-[color:var(--ink)]"
+      className="scroll-mt-24 mt-8 text-[17.5px] md:text-[19px] font-semibold text-[color:var(--ink)]"
     >
       {children}
     </h3>
@@ -99,7 +99,7 @@ function H3({ id, children }: { id: string; children: React.ReactNode }) {
 
 function P({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mt-4 text-[15.5px] leading-[1.75] text-[#2E3D5E]">
+    <p className="mt-4 text-[15.5px] leading-[1.75] text-[color:var(--ink-2)]">
       {children}
     </p>
   );
@@ -148,30 +148,30 @@ function WhitepaperPage() {
 
       {/* Header block */}
       <section style={{ background: "var(--hero)" }}>
-        <div className="max-w-[900px] mx-auto px-6 lg:px-8 py-14 md:py-20">
+        <div className="max-w-[900px] mx-auto px-6 lg:px-8 py-10 md:py-14">
           <div className="text-[12px] font-bold tracking-[0.16em] text-[color:var(--brand)]">WHITEPAPER</div>
-          <h1 className="mt-3 text-[34px] md:text-[46px] font-bold leading-[1.1] tracking-[-0.02em] text-[color:var(--ink)]">
+          <h1 className="mt-2 text-[32px] md:text-[42px] font-bold leading-[1.1] tracking-[-0.02em] text-[color:var(--ink)] max-w-[760px]">
             Clinical Dictation Without the Cloud
           </h1>
-          <p className="mt-5 text-[16.5px] md:text-[18px] leading-[1.55] text-[color:var(--ink-2)] max-w-[720px]">
+          <p className="mt-4 text-[16px] md:text-[17px] leading-[1.55] text-[color:var(--ink-2)] max-w-[640px]">
             Security, compliance, and real-time performance in hospital speech recognition, and why the safest place to
             run it is inside your own network.
           </p>
-          <div className="mt-6 text-[13px] font-medium text-[color:var(--muted-ink)]">
+          <div className="mt-4 text-[13px] font-medium text-[color:var(--muted-ink)]">
             July 2026 · MayScribe · Prepared for hospital IT, compliance, and clinical informatics leadership
           </div>
         </div>
       </section>
 
       {/* TOC + Body */}
-      <article className="max-w-[760px] mx-auto px-6 lg:px-8 py-12 md:py-16">
+      <article className="max-w-[760px] mx-auto px-6 lg:px-8 py-10 md:py-14">
         <nav
           aria-label="Contents"
-          className="rounded-[10px] p-5 md:p-6"
+          className="rounded-[10px] p-4 md:p-5"
           style={{ background: "var(--hero)", border: "1px solid var(--border-hair)" }}
         >
           <div className="text-[11px] font-bold tracking-[0.16em] text-[color:var(--brand)]">CONTENTS</div>
-          <ol className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-[14px] text-[color:var(--ink-2)] list-decimal pl-5">
+          <ol className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-[14px] text-[color:var(--ink-2)] list-decimal pl-5">
             <li><a href="#s1" className="hover:text-[color:var(--brand)]">Executive summary</a></li>
             <li><a href="#s2" className="hover:text-[color:var(--brand)]">The documentation problem</a></li>
             <li><a href="#s3" className="hover:text-[color:var(--brand)]">What goes wrong today</a></li>
