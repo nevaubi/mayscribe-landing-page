@@ -304,6 +304,13 @@ function Hero({ onBookDemo }: { onBookDemo: () => void }) {
               >
                 Book a demo <ArrowRight className="h-4 w-4" />
               </button>
+              <Link
+                to="/whitepaper"
+                className="bg-white rounded-[8px] h-11 lg:h-12 px-5 text-[14.5px] lg:text-[15px] font-semibold text-[color:var(--ink)] inline-flex items-center gap-2 flex-1 sm:flex-none justify-center"
+                style={{ border: "1px solid var(--border-strong)" }}
+              >
+                Read the whitepaper <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
             <div className="mt-8 lg:mt-10 flex flex-wrap gap-x-6 lg:gap-x-10 gap-y-2 lg:gap-y-3 text-[14px] lg:text-[16px] font-semibold text-[color:var(--ink-2)]">
               <span>HIPAA-aligned</span>
