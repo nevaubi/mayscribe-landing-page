@@ -242,6 +242,7 @@ export function EmrDashboard() {
   >(null);
   const [signPulse, setSignPulse] = useState(false);
   const [showReview, setShowReview] = useState(true);
+  const [formatUndo, setFormatUndo] = useState<{ section: SoapSection; prev: string } | null>(null);
 
   const activeSectionRef = useRef<SoapSection>("subjective");
   activeSectionRef.current = activeSoapSection;
