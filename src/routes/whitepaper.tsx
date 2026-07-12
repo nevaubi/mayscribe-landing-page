@@ -164,14 +164,14 @@ function WhitepaperPage() {
       </section>
 
       {/* TOC + Body */}
-      <article className="max-w-[760px] mx-auto px-6 lg:px-8 py-12 md:py-16">
+      <article className="max-w-[760px] mx-auto px-6 lg:px-8 py-10 md:py-14">
         <nav
           aria-label="Contents"
-          className="rounded-[10px] p-5 md:p-6"
+          className="rounded-[10px] p-4 md:p-5"
           style={{ background: "var(--hero)", border: "1px solid var(--border-hair)" }}
         >
           <div className="text-[11px] font-bold tracking-[0.16em] text-[color:var(--brand)]">CONTENTS</div>
-          <ol className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-[14px] text-[color:var(--ink-2)] list-decimal pl-5">
+          <ol className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-[14px] text-[color:var(--ink-2)] list-decimal pl-5">
             <li><a href="#s1" className="hover:text-[color:var(--brand)]">Executive summary</a></li>
             <li><a href="#s2" className="hover:text-[color:var(--brand)]">The documentation problem</a></li>
             <li><a href="#s3" className="hover:text-[color:var(--brand)]">What goes wrong today</a></li>
