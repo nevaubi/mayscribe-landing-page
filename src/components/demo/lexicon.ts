@@ -610,7 +610,9 @@ export function detectAll(text: string): Detected[] {
   const wordRe = /\b[A-Za-z][A-Za-z-]{2,}\b/g;
   for (let m: RegExpExecArray | null; (m = wordRe.exec(text)); ) {
     const tok = m[0];
+    const tokLower = tok.toLowerCase();
     if (isConsumed(m.index, m.index + tok.length)) continue;
+    if (STOPWORDS.has(tokLower)) continue; // never flag common words as meds
     const med = findMed(tok);
     if (med) {
       out.push({
