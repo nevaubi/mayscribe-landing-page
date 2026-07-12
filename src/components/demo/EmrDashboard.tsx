@@ -506,8 +506,8 @@ export function EmrDashboard() {
               end: pc.doseEnd,
               type: "dose",
               status: "hold",
-              candidates: nearest.map((s) => `${s.value} ${s.unit}`),
-              reason: `Available strengths: ${nearest.map((s) => `${s.value} ${s.unit}`).join(", ")}`,
+              candidates: nearest.map((s: Strength) => `${s.value} ${s.unit}`),
+              reason: `Available strengths: ${nearest.map((s: Strength) => `${s.value} ${s.unit}`).join(", ")}`,
               minConfidence: 1,
             };
             setAnchors((prev) => [
