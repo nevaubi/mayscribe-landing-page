@@ -25,9 +25,9 @@ const DG_URL =
   "wss://api.deepgram.com/v1/listen?model=nova-3-medical&language=en&smart_format=true&interim_results=true&dictation=true&numerals=true&punctuate=true&endpointing=300&utterance_end_ms=1200";
 
 export function useDictation(opts: UseDictationOptions = {}) {
-  const { onInterim, onFinal, onError } = opts;
-  const optsRef = useRef({ onInterim, onFinal, onError });
-  optsRef.current = { onInterim, onFinal, onError };
+  const { onInterim, onFinal, onUtteranceEnd, onError } = opts;
+  const optsRef = useRef({ onInterim, onFinal, onUtteranceEnd, onError });
+  optsRef.current = { onInterim, onFinal, onUtteranceEnd, onError };
 
   const [status, setStatus] = useState<DictationStatus>("idle");
   const [audioLevel, setAudioLevel] = useState(0);
