@@ -103,6 +103,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const quietSinceRef = useRef<number | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const pcmBufferRef = useRef<Int16Array[]>([]);
+  const pcmBufferSamplesRef = useRef(0);
 
   // RAF-batched interim delivery to keep popup smooth.
   const pendingInterimRef = useRef<string | null>(null);
