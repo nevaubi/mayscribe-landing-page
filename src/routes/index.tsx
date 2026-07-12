@@ -51,7 +51,7 @@ function GradientButton({ children, className = "" }: { children: React.ReactNod
 function Nav() {
   return (
     <header className="w-full">
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 h-[72px] flex items-center justify-between">
+      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 h-[60px] md:h-[72px] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <Logo size={34} />
           <span className="text-[22px] font-bold text-[color:var(--ink)] tracking-tight">MayScribe</span>
@@ -281,51 +281,46 @@ function Hero() {
         }}
       />
       <Nav />
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 pb-24 pt-8 lg:pt-14">
+      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 pb-14 pt-4 lg:pb-24 lg:pt-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-5">
-            <h1 className="text-[44px] sm:text-[56px] lg:text-[64px] font-bold leading-[1.05] tracking-[-0.02em] text-[color:var(--ink)]">
+            <h1 className="text-[38px] sm:text-[56px] lg:text-[64px] font-bold leading-[1.08] lg:leading-[1.05] tracking-[-0.02em] text-[color:var(--ink)]">
               Clinical
               <br />
               documentation.
               <br />
               <span style={{ color: "#3D5CA1" }}>Done right.</span>
             </h1>
-            <p className="mt-6 max-w-[540px] text-[18px] leading-[28px] text-[color:var(--ink-2)]">
+            <p className="mt-5 lg:mt-6 max-w-[540px] text-[15.5px] lg:text-[18px] leading-[24px] lg:leading-[28px] text-[color:var(--ink-2)]">
               A clinician-controlled dictation experience with confidence-aware review, medication intelligence, and
               fast insertion into the existing note workflow.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button className="bg-[color:var(--brand-deep)] text-white rounded-[8px] h-12 px-5 text-[15px] font-semibold inline-flex items-center gap-2 shadow-btn">
+            <div className="mt-7 lg:mt-8 flex flex-wrap gap-3">
+              <button className="bg-[color:var(--brand-deep)] text-white rounded-[8px] h-11 lg:h-12 px-5 text-[14.5px] lg:text-[15px] font-semibold inline-flex items-center gap-2 shadow-btn flex-1 sm:flex-none justify-center">
                 Start dictating <ArrowRight className="h-4 w-4" />
               </button>
               <button
-                className="bg-white rounded-[8px] h-12 px-5 text-[15px] font-semibold text-[color:var(--ink)] inline-flex items-center gap-2"
+                className="bg-white rounded-[8px] h-11 lg:h-12 px-5 text-[14.5px] lg:text-[15px] font-semibold text-[color:var(--ink)] inline-flex items-center gap-2 flex-1 sm:flex-none justify-center"
                 style={{ border: "1px solid var(--border-strong)" }}
               >
                 Book a demo <ArrowRight className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-10 flex flex-wrap gap-x-10 gap-y-3 text-[16px] font-semibold text-[color:var(--ink-2)]">
+            <div className="mt-8 lg:mt-10 flex flex-wrap gap-x-6 lg:gap-x-10 gap-y-2 lg:gap-y-3 text-[14px] lg:text-[16px] font-semibold text-[color:var(--ink-2)]">
               <span>HIPAA-aligned</span>
               <span>Secure by design</span>
               <span>No default retention</span>
             </div>
           </div>
 
-          <div className="lg:col-span-7 relative">
+          <div className="hidden md:block lg:col-span-7 relative">
             <WorkspaceCard />
             {/* Floating dictation - overlaps left edge */}
-            <div className="hidden md:block absolute -left-6 top-32 z-10">
+            <div className="absolute -left-6 top-32 z-10">
               <FloatingDictation />
             </div>
             {/* Suggested meds - overlaps bottom right */}
-            <div className="hidden md:block absolute -right-4 bottom-20 z-10">
-              <SuggestedMeds />
-            </div>
-            {/* Mobile stacked */}
-            <div className="mt-6 grid gap-6 md:hidden">
-              <FloatingDictation />
+            <div className="absolute -right-4 bottom-20 z-10">
               <SuggestedMeds />
             </div>
           </div>
@@ -344,12 +339,6 @@ function Compliance() {
         "Administrative, technical, and physical safeguards mapped to the Security Rule. Business associate agreements executed with your organization and AWS.",
     },
     {
-      stage: "IN PROGRESS",
-      title: "SOC 2 Type I",
-      body:
-        "Controls are designed, documented, and operating. An independent Type I attestation is targeted within the first year of deployment.",
-    },
-    {
       stage: "PLANNED",
       title: "SOC 1 and SOC 2 Type II",
       body:
@@ -357,23 +346,23 @@ function Compliance() {
     },
   ];
   return (
-    <section style={{ background: "var(--hero)" }} className="py-[76px]">
+    <section style={{ background: "var(--hero)" }} className="py-12 md:py-[76px]">
       <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
         <div className="text-center">
           <div className="text-[12px] font-bold tracking-[0.16em] text-[color:var(--brand)]">COMPLIANCE</div>
-          <h2 className="mt-3 text-[32px] font-bold text-[color:var(--ink)] tracking-[-0.01em]">
+          <h2 className="mt-3 text-[26px] md:text-[32px] font-bold text-[color:var(--ink)] tracking-[-0.01em]">
             A clear path to HIPAA, SOC 1, and SOC 2
           </h2>
-          <p className="mt-4 mx-auto max-w-[660px] text-[15.5px] leading-[1.6] text-[color:var(--ink-2)]">
+          <p className="mt-4 mx-auto max-w-[660px] text-[14.5px] md:text-[15.5px] leading-[1.6] text-[color:var(--ink-2)]">
             MayScribe ships HIPAA-aligned and BAA-ready. Independent attestations are scoped and staged, and every
             control is inspectable in your own environment along the way.
           </p>
         </div>
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-10 md:mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-[820px] mx-auto">
           {cards.map((c) => (
             <div
               key={c.stage}
-              className="bg-white rounded-[10px] p-6"
+              className="bg-white rounded-[10px] p-5 md:p-6"
               style={{ border: "1px solid var(--border-default)" }}
             >
               <div className="text-[12px] font-bold tracking-[0.14em] text-[color:var(--brand)]">{c.stage}</div>
@@ -409,21 +398,21 @@ function Security() {
     },
   ];
   return (
-    <section className="py-[76px] bg-white">
+    <section className="py-12 md:py-[76px] bg-white">
       <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
         <div className="text-center">
           <div className="text-[12px] font-bold tracking-[0.16em] text-[color:var(--brand)]">DATA SECURITY</div>
-          <h2 className="mt-3 text-[32px] font-bold text-[color:var(--ink)] tracking-[-0.01em]">
+          <h2 className="mt-3 text-[26px] md:text-[32px] font-bold text-[color:var(--ink)] tracking-[-0.01em]">
             Nothing stored means nothing to breach
           </h2>
-          <p className="mt-4 mx-auto max-w-[660px] text-[15.5px] leading-[1.6] text-[color:var(--ink-2)]">
+          <p className="mt-4 mx-auto max-w-[660px] text-[14.5px] md:text-[15.5px] leading-[1.6] text-[color:var(--ink-2)]">
             The strongest security posture is not holding the data at all. MayScribe processes audio in memory, verifies
             deterministically, and keeps PHI inside infrastructure you control.
           </p>
         </div>
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-10 md:mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
           {items.map(({ Icon, title, body }) => (
-            <div key={title} className="bg-white rounded-[10px] p-6" style={{ border: "1px solid var(--border-default)" }}>
+            <div key={title} className="bg-white rounded-[10px] p-5 md:p-6" style={{ border: "1px solid var(--border-default)" }}>
               <div
                 className="h-9 w-9 rounded-[8px] inline-flex items-center justify-center"
                 style={{ background: "var(--chip-blue-bg)", border: "1px solid var(--chip-blue-border)" }}
@@ -442,20 +431,20 @@ function Security() {
 
 function CtaBand() {
   return (
-    <section style={{ background: "var(--dark)" }} className="py-16">
-      <div className="max-w-[1200px] mx-auto px-6 lg:px-10 flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+    <section style={{ background: "var(--dark)" }} className="py-12 md:py-16">
+      <div className="max-w-[1200px] mx-auto px-6 lg:px-10 flex flex-col md:flex-row md:items-center md:justify-between gap-5 md:gap-8">
         <div className="max-w-[560px]">
-          <h3 className="text-[26px] font-bold text-white leading-tight">Bring your compliance team.</h3>
-          <p className="mt-3 text-[14px] leading-[1.6] max-w-[520px]" style={{ color: "var(--dark-body)" }}>
+          <h3 className="text-[22px] md:text-[26px] font-bold text-white leading-tight tracking-[-0.01em]">Bring your compliance team.</h3>
+          <p className="mt-3 text-[13.5px] md:text-[14px] leading-[1.6] max-w-[520px]" style={{ color: "var(--dark-body)" }}>
             We built the audit trail, the BAA package, and the control documentation for exactly this review.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button className="bg-white text-[color:var(--ink)] rounded-[8px] h-11 px-5 text-[14px] font-semibold">
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <button className="bg-white text-[color:var(--ink)] rounded-[8px] h-11 px-5 text-[14px] font-semibold w-full sm:w-auto">
             Book a security review
           </button>
           <button
-            className="text-white rounded-[8px] h-11 px-5 text-[14px] font-semibold"
+            className="text-white rounded-[8px] h-11 px-5 text-[14px] font-semibold w-full sm:w-auto"
             style={{ border: "1px solid var(--dark-border)", background: "transparent" }}
           >
             Request the whitepaper
@@ -472,7 +461,7 @@ function Footer() {
       <div className="max-w-[1200px] mx-auto px-6 lg:px-10 py-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="text-[16px] font-bold text-[color:var(--ink)]">MayScribe</div>
-          <div className="flex flex-wrap gap-6 text-[12.5px] font-medium text-[color:var(--ink-2)]">
+          <div className="flex flex-wrap gap-x-5 gap-y-2 sm:gap-6 text-[12.5px] font-medium text-[color:var(--ink-2)]">
             <a href="#">Product</a>
             <a href="#">Security</a>
             <a href="#">Compliance</a>
@@ -480,7 +469,7 @@ function Footer() {
           </div>
         </div>
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[11.5px] text-[color:var(--muted-ink)]">
-          <div>HIPAA-aligned · BAA-ready · SOC 2 Type I in progress</div>
+          <div>HIPAA-aligned · BAA-ready · SOC attestations on roadmap</div>
           <div>© 2026 MayScribe</div>
         </div>
       </div>
