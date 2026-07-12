@@ -122,19 +122,6 @@ export function useDictation(opts: UseDictationOptions = {}) {
     // 1) mic — request this first so the call remains tied to the user gesture.
     let stream: MediaStream;
     try {
-      if (navigator.permissions?.query) {
-        try {
-          const permission = await navigator.permissions.query({
-            name: "microphone" as PermissionName,
-          });
-          if (permission.state === "denied") {
-            fail(sessionId, "Microphone blocked — enable it in the browser bar");
-            return;
-          }
-        } catch {
-          // Safari does not support microphone permission queries.
-        }
-      }
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
