@@ -276,13 +276,14 @@ export function useDictation(opts: UseDictationOptions = {}) {
     };
 
     socket.onclose = (ev) => {
-      console.warn("[dictation] socket close", ev.code, ev.reason);
       if (stoppingRef.current || sessionId !== sessionRef.current) return;
       if (ev.code === 1008 || ev.code === 4001 || ev.code === 4008) {
+        console.warn("[dictation] socket close", ev.code, ev.reason);
         fail(sessionId, "Session expired — press F2 to resume", true);
         return;
       }
       if (ev.code !== 1000 && ev.code !== 1005) {
+        console.warn("[dictation] socket close", ev.code, ev.reason);
         fail(sessionId, "Dictation disconnected — press F2 to retry");
         return;
       }
