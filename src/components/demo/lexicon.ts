@@ -4,10 +4,56 @@
 export interface MedEntry {
   name: string;
   aliases: string[];
-  typicalDoseRange: { min: number; max: number; unit: string };
+  // Curated dose-range only on ~90 highest-confidence entries. Others rely on
+  // async RxTerms STRENGTHS_AND_FORMS lookup in verify.ts.
+  typicalDoseRange?: { min: number; max: number; unit: string };
   routes: string[];
   freqs: string[];
 }
+
+// Highest-confidence curated core: the demo patient's meds plus common
+// outpatient / inpatient drugs where hardcoded ranges are safe.
+const CORE_RANGE_NAMES = new Set<string>([
+  // Demo patient
+  "Lisinopril", "Metformin", "Atorvastatin",
+  // Cardiovascular
+  "Furosemide", "Hydrochlorothiazide", "Spironolactone", "Losartan", "Valsartan",
+  "Metoprolol", "Carvedilol", "Atenolol", "Propranolol", "Amlodipine",
+  "Diltiazem", "Verapamil", "Nitroglycerin", "Clonidine", "Digoxin",
+  "Amiodarone",
+  // Lipid
+  "Rosuvastatin", "Simvastatin", "Pravastatin", "Ezetimibe",
+  // Antiplatelet / Anticoagulant
+  "Aspirin", "Clopidogrel", "Warfarin", "Apixaban", "Rivaroxaban", "Heparin",
+  "Enoxaparin",
+  // Endocrine / Diabetes
+  "Glipizide", "Glimepiride", "Sitagliptin", "Empagliflozin", "Dapagliflozin",
+  "Semaglutide", "Liraglutide", "Insulin glargine", "Insulin lispro",
+  "Insulin aspart", "Levothyroxine",
+  // Steroids
+  "Prednisone", "Dexamethasone", "Methylprednisolone", "Hydrocortisone",
+  // Pulmonary
+  "Albuterol", "Ipratropium", "Tiotropium", "Fluticasone", "Budesonide",
+  "Montelukast",
+  // GI
+  "Omeprazole", "Pantoprazole", "Esomeprazole", "Ranitidine", "Famotidine",
+  "Ondansetron",
+  // Antibiotics
+  "Amoxicillin", "Amoxicillin-clavulanate", "Azithromycin", "Doxycycline",
+  "Ciprofloxacin", "Levofloxacin", "Cephalexin", "Ceftriaxone", "Clindamycin",
+  "Trimethoprim-sulfamethoxazole", "Nitrofurantoin", "Metronidazole",
+  "Vancomycin",
+  // Pain / neuro
+  "Acetaminophen", "Ibuprofen", "Naproxen", "Ketorolac", "Tramadol",
+  "Hydrocodone-acetaminophen", "Oxycodone", "Morphine", "Gabapentin",
+  "Pregabalin",
+  // Psych
+  "Sertraline", "Escitalopram", "Fluoxetine", "Citalopram", "Duloxetine",
+  "Venlafaxine", "Bupropion", "Trazodone", "Mirtazapine", "Alprazolam",
+  "Lorazepam", "Clonazepam", "Diazepam",
+  // GU / MSK
+  "Tamsulosin", "Finasteride", "Allopurinol", "Colchicine",
+]);
 
 // eslint-disable-next-line prettier/prettier
 export const MEDS: MedEntry[] = [
@@ -354,6 +400,14 @@ export const MEDS: MedEntry[] = [
   { name: "Letrozole", aliases: ["femara"], typicalDoseRange: { min: 2.5, max: 2.5, unit: "mg" }, routes: ["PO"], freqs: ["daily"] },
   { name: "Anastrozole", aliases: ["arimidex"], typicalDoseRange: { min: 1, max: 1, unit: "mg" }, routes: ["PO"], freqs: ["daily"] },
 ];
+
+// Strip typicalDoseRange from entries outside the curated core. Async RxTerms
+// lookup in verify.ts handles dose validation for those meds.
+for (const m of MEDS) {
+  if (!CORE_RANGE_NAMES.has(m.name)) {
+    delete (m as { typicalDoseRange?: unknown }).typicalDoseRange;
+  }
+}
 
 // Look-alike / sound-alike pairs (bidirectional)
 export const LASA: [string, string][] = [

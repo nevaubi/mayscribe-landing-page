@@ -23,9 +23,20 @@ export interface Span {
   minConfidence: number;
 }
 
+export interface PendingRangeCheck {
+  spanId: string;
+  medName: string;
+  dose: number;
+  unit: string;
+  doseStart: number;
+  doseEnd: number;
+  doseText: string;
+}
+
 export interface VerifyResult {
   spans: Span[];
   committedText: string; // string with underscore placeholders for holds
+  pendingRangeChecks: PendingRangeCheck[];
 }
 
 const HOLD_CONF_THRESHOLD = 0.86;
@@ -67,6 +78,7 @@ export function verify(
 ): VerifyResult {
   const detected = detectAll(formattedText);
   const spans: Span[] = [];
+  const pendingRangeChecks: PendingRangeCheck[] = [];
 
   // Med + dose HOLD logic: iterate detected in order, pair med with next dose within 40 chars.
   for (let i = 0; i < detected.length; i++) {
@@ -103,20 +115,33 @@ export function verify(
       const val = nearestDose.meta?.value as number;
       const unit = nearestDose.meta?.unit as string;
       const range = medEntry.typicalDoseRange;
-      if (
-        unit &&
-        unit.toLowerCase() === range.unit.toLowerCase() &&
-        (val < range.min || val > range.max)
-      ) {
-        status = "hold";
-        type = "dose";
-        const relation = val > range.max ? "above" : "below";
-        reason = `Dose ${relation} typical range for ${medEntry.name}`;
-        candidates = [
-          `${range.min} ${range.unit}`,
-          `${Math.round(((range.min + range.max) / 2) * 100) / 100} ${range.unit}`,
-          `${range.max} ${range.unit}`,
-        ];
+      if (range) {
+        if (
+          unit &&
+          unit.toLowerCase() === range.unit.toLowerCase() &&
+          (val < range.min || val > range.max)
+        ) {
+          status = "hold";
+          type = "dose";
+          const relation = val > range.max ? "above" : "below";
+          reason = `Dose ${relation} typical range for ${medEntry.name}`;
+          candidates = [
+            `${range.min} ${range.unit}`,
+            `${Math.round(((range.min + range.max) / 2) * 100) / 100} ${range.unit}`,
+            `${range.max} ${range.unit}`,
+          ];
+        }
+      } else if (typeof val === "number" && unit) {
+        // No curated range — defer to async RxTerms STRENGTHS_AND_FORMS check.
+        pendingRangeChecks.push({
+          spanId: "", // filled below
+          medName: medEntry.name,
+          dose: val,
+          unit,
+          doseStart: nearestDose.start,
+          doseEnd: nearestDose.end,
+          doseText: nearestDose.text,
+        });
       }
     }
 
@@ -127,7 +152,7 @@ export function verify(
       candidates = [d.text, "(dismiss)"];
     }
 
-    spans.push({
+    const span: Span = {
       id: nextId(),
       text: d.text,
       start: d.start,
@@ -137,7 +162,16 @@ export function verify(
       candidates,
       reason,
       minConfidence: conf,
-    });
+    };
+    spans.push(span);
+    // Attach spanId to the last pushed pending check (this med's dose).
+    if (
+      pendingRangeChecks.length &&
+      pendingRangeChecks[pendingRangeChecks.length - 1].spanId === "" &&
+      pendingRangeChecks[pendingRangeChecks.length - 1].medName === medEntry.name
+    ) {
+      pendingRangeChecks[pendingRangeChecks.length - 1].spanId = span.id;
+    }
   }
 
   // Also flag low-confidence dose spans not attached to a med
@@ -176,7 +210,7 @@ export function verify(
   }
   out += formattedText.slice(cursor);
 
-  return { spans, committedText: out };
+  return { spans, committedText: out, pendingRangeChecks };
 }
 
 export const DEMO_ACTIVE_MEDS = MEDS

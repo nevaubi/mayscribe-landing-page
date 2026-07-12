@@ -27,8 +27,8 @@ interface LookupResult {
   conditions: CondResult[];
 }
 
-const RXTERMS_URL = "https://clinicaltables.nlm.nih.gov/api/rxterms/v3/search";
-const CONDITIONS_URL = "https://clinicaltables.nlm.nih.gov/api/conditions/v3/search";
+import { searchRxTerms, searchConditions } from "./lookupClient";
+
 const DEBOUNCE_MS = 200;
 const MIN_LEN = 2;
 
@@ -67,10 +67,10 @@ function fuzzyFallbackMeds(q: string): MedResult[] {
       else best = Math.min(best, levenshtein(n, w, 2));
     }
     if (best <= 2) {
-      const strengths = [
-        `${m.typicalDoseRange.min} ${m.typicalDoseRange.unit}`,
-        `${m.typicalDoseRange.max} ${m.typicalDoseRange.unit}`,
-      ];
+      const r = m.typicalDoseRange;
+      const strengths = r
+        ? [`${r.min} ${r.unit}`, `${r.max} ${r.unit}`]
+        : [];
       scored.push({ r: { name: m.name, strengths }, s: best });
     }
   }
@@ -79,38 +79,11 @@ function fuzzyFallbackMeds(q: string): MedResult[] {
 }
 
 async function fetchRxTerms(q: string, signal: AbortSignal): Promise<MedResult[]> {
-  const url = `${RXTERMS_URL}?terms=${encodeURIComponent(q)}&ef=STRENGTHS_AND_FORMS&maxList=5`;
-  const res = await fetch(url, { signal });
-  if (!res.ok) throw new Error(String(res.status));
-  const data = (await res.json()) as [
-    number,
-    string[],
-    { STRENGTHS_AND_FORMS?: string[] } | null,
-    string[][],
-  ];
-  const display = data[3] ?? [];
-  const strengthsArr = data[2]?.STRENGTHS_AND_FORMS ?? [];
-  return display.slice(0, 5).map((row, i) => {
-    const name = Array.isArray(row) ? row[0] : String(row);
-    const raw = strengthsArr[i] ?? "";
-    const strengths = raw
-      .split(/[|;]/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 6);
-    return { name, strengths };
-  });
+  return searchRxTerms(q, signal);
 }
 
 async function fetchConditions(q: string, signal: AbortSignal): Promise<CondResult[]> {
-  const url = `${CONDITIONS_URL}?terms=${encodeURIComponent(q)}&maxList=5`;
-  const res = await fetch(url, { signal });
-  if (!res.ok) throw new Error(String(res.status));
-  const data = (await res.json()) as [number, string[], unknown, string[][]];
-  const display = data[3] ?? [];
-  return display.slice(0, 5).map((row) => ({
-    name: Array.isArray(row) ? row[0] : String(row),
-  }));
+  return searchConditions(q, signal);
 }
 
 // Local condition list used only when the NLM /conditions endpoint fails.

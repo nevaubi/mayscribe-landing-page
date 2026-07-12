@@ -6,6 +6,7 @@ import {
   FORMAT_TOGGLES,
   type FormatToggle,
 } from "./format-options";
+import { SmoothInterim } from "./SmoothInterim";
 
 const PANEL_WIDTH = 380;
 const EDGE_MARGIN = 24;
@@ -92,13 +93,15 @@ function renderTranscriptWithHighlights(
   }
 
   if (interim) {
+    const needsSpace = !(text.endsWith(" ") || text.length === 0);
     parts.push(
-      <span
+      <SmoothInterim
         key="interim"
+        target={interim}
+        prefix={needsSpace ? " " : ""}
         style={{ color: "#7A8AAC", fontStyle: "italic" }}
-      >
-        {(text.endsWith(" ") || text.length === 0 ? "" : " ") + interim}
-      </span>,
+        rightAnchor={false}
+      />,
     );
   }
   return parts;

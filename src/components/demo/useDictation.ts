@@ -23,8 +23,10 @@ export interface UseDictationOptions {
 }
 
 // Latency-tuned: shorter endpointing, more aggressive utterance close.
-const DG_URL =
+const DG_URL_BASE =
   "wss://api.deepgram.com/v1/listen?model=nova-3-medical&language=en&smart_format=true&interim_results=true&dictation=true&numerals=true&punctuate=true&endpointing=180&utterance_end_ms=1000";
+const DG_URL_PCM =
+  DG_URL_BASE + "&encoding=linear16&sample_rate=16000&channels=1";
 
 const QUIET_CLOSE_MS = 2000;
 const QUIET_LEVEL_THRESHOLD = 0.025;
@@ -89,6 +91,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const finalLedgerRef = useRef("");
   const lastFinalEndRef = useRef(0);
   const quietSinceRef = useRef<number | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   // RAF-batched interim delivery to keep popup smooth.
   const pendingInterimRef = useRef<string | null>(null);
@@ -120,6 +124,15 @@ export function useDictation(opts: UseDictationOptions = {}) {
       streamRef.current?.getTracks().forEach((t) => t.stop());
     } catch {}
     streamRef.current = null;
+    try {
+      workletNodeRef.current?.port.close();
+      workletNodeRef.current?.disconnect();
+    } catch {}
+    workletNodeRef.current = null;
+    try {
+      sourceNodeRef.current?.disconnect();
+    } catch {}
+    sourceNodeRef.current = null;
     try {
       analyserRef.current?.disconnect();
     } catch {}
@@ -240,6 +253,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
       const ctx = new AC();
       audioCtxRef.current = ctx;
       const src = ctx.createMediaStreamSource(stream);
+      sourceNodeRef.current = src;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.6;
@@ -287,9 +301,34 @@ export function useDictation(opts: UseDictationOptions = {}) {
       rafRef.current = requestAnimationFrame(tick);
     } catch {}
 
+    // Try to bring up the AudioWorklet PCM path. If anything fails we fall
+    // back to the MediaRecorder/opus path further down.
+    let useWorklet = false;
+    try {
+      const ctx = audioCtxRef.current;
+      const src = sourceNodeRef.current;
+      if (ctx && src) {
+        await ctx.audioWorklet.addModule("/pcm-worklet.js");
+        const node = new AudioWorkletNode(ctx, "pcm-downsampler-16k", {
+          numberOfInputs: 1,
+          numberOfOutputs: 0,
+          channelCount: 1,
+        });
+        src.connect(node);
+        workletNodeRef.current = node;
+        useWorklet = true;
+      }
+    } catch (e) {
+      console.warn("[dictation] worklet unavailable, falling back to opus", e);
+      useWorklet = false;
+    }
+
+    if (sessionId !== sessionRef.current) return;
+
+    const dgUrl = useWorklet ? DG_URL_PCM : DG_URL_BASE;
     let socket: WebSocket;
     try {
-      socket = new WebSocket(DG_URL, ["bearer", accessToken]);
+      socket = new WebSocket(dgUrl, ["bearer", accessToken]);
     } catch {
       fail(sessionId, "Dictation unavailable — retry");
       return;
@@ -303,6 +342,20 @@ export function useDictation(opts: UseDictationOptions = {}) {
         return;
       }
       setDictationStatus("listening");
+
+      if (useWorklet && workletNodeRef.current) {
+        workletNodeRef.current.port.onmessage = (ev: MessageEvent) => {
+          if (
+            sessionId !== sessionRef.current ||
+            socket.readyState !== WebSocket.OPEN
+          )
+            return;
+          const buf = ev.data as ArrayBuffer;
+          if (buf && buf.byteLength) socket.send(buf);
+        };
+        return;
+      }
+
       try {
         const preferredType = "audio/webm;codecs=opus";
         const mimeType = MediaRecorder.isTypeSupported(preferredType)

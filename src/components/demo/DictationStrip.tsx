@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Mic, X } from "lucide-react";
 import type { DictationStatus } from "./useDictation";
+import { SmoothInterim } from "./SmoothInterim";
 
 interface Props {
   status: DictationStatus;
@@ -14,6 +15,10 @@ interface Props {
   expired: boolean;
   lastCommit: string | null;
   onStop: () => void;
+  /** Number of open holds — shown as blue badge on the F1 chip. */
+  holdCount?: number;
+  /** True when the review tray is closed. Enables the amber pulse. */
+  reviewTrayClosed?: boolean;
 }
 
 const BAR_COUNT = 10;
@@ -27,12 +32,15 @@ const SECTION_LABEL: Record<string, string> = {
 export function DictationStrip({
   status,
   audioLevel,
+  interim,
   section,
   startedAt,
   quietMsRemaining,
   errorMessage,
   expired,
   onStop,
+  holdCount = 0,
+  reviewTrayClosed = true,
 }: Props) {
   const visible = status !== "idle";
   const [portalReady, setPortalReady] = useState(false);
@@ -86,6 +94,16 @@ export function DictationStrip({
     const id = window.setInterval(tick, 500);
     return () => clearInterval(id);
   }, [startedAt, status]);
+
+  // Amber pulse on new hold while review tray closed.
+  const [pulseKey, setPulseKey] = useState(0);
+  const prevCountRef = useRef(holdCount);
+  useEffect(() => {
+    if (holdCount > prevCountRef.current && reviewTrayClosed) {
+      setPulseKey((k) => k + 1);
+    }
+    prevCountRef.current = holdCount;
+  }, [holdCount, reviewTrayClosed]);
 
   if (!portalReady || !visible) return null;
 
@@ -215,6 +233,43 @@ export function DictationStrip({
                   : "\u00A0"}
             </div>
           </div>
+
+          {/* F1 · Review hint chip with hold count badge and amber pulse. */}
+          <div
+            key={pulseKey}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded-full flex-shrink-0"
+            style={{
+              background: "#F3F6FB",
+              color: "#46587E",
+              fontSize: 10,
+              fontWeight: 600,
+              animation:
+                holdCount > 0 && reviewTrayClosed
+                  ? "dictation-hold-pulse 1.6s ease-out 2"
+                  : undefined,
+            }}
+            title="Press F1 to open the review panel"
+          >
+            <span style={{ letterSpacing: 0.3 }}>F1 · Review</span>
+            {holdCount > 0 && (
+              <span
+                className="inline-flex items-center justify-center rounded-full"
+                style={{
+                  background: "#0D57FA",
+                  color: "white",
+                  minWidth: 14,
+                  height: 14,
+                  padding: "0 4px",
+                  fontSize: 9,
+                  fontWeight: 700,
+                }}
+              >
+                {holdCount}
+              </span>
+            )}
+            <style>{`@keyframes dictation-hold-pulse { 0%{box-shadow:0 0 0 0 rgba(242,168,58,0.55)} 100%{box-shadow:0 0 0 10px rgba(242,168,58,0)} }`}</style>
+          </div>
+
 
           <button
             onClick={onStop}
