@@ -86,10 +86,6 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const [quietMsRemaining, setQuietMsRemaining] = useState<number | null>(null);
   const [expired, setExpired] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [audioLevel, setAudioLevel] = useState(0);
-  const [quietMsRemaining, setQuietMsRemaining] = useState<number | null>(null);
-  const [expired, setExpired] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const statusRef = useRef<DictationStatus>("idle");
   const sessionRef = useRef(0);
