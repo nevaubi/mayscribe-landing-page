@@ -515,20 +515,22 @@ export function EmrDashboard() {
     }
   }, [captureActiveCaret, status, start, stop]);
 
-  // F2 hotkey
+  // F1 / F2 hotkeys — capture phase so textareas & browser defaults can't swallow them
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       if (e.key === "F2") {
         e.preventDefault();
+        e.stopPropagation();
         toggleDictation();
-      }
-      if (e.key === "F1") {
+      } else if (e.key === "F1") {
         e.preventDefault();
+        e.stopPropagation();
         setShowReview((prev) => !prev);
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [toggleDictation]);
 
   // Confirm / dismiss handlers used by ReviewTray + tray keybindings.
@@ -969,11 +971,7 @@ export function EmrDashboard() {
                     </div>
 
                     {/* Review Panel — toggle with F1, visible during dictation or when holds exist */}
-                    {showReview &&
-                      (holdEntries.length > 0 ||
-                        status === "listening" ||
-                        status === "connecting" ||
-                        interim.length > 0) && (
+                    {showReview && (
                         <ReviewTray
                           holds={holdEntries}
                           activeIndex={activeHoldIndex}

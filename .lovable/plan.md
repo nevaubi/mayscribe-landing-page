@@ -1,32 +1,30 @@
-## Plan
+## Why F1 doesn't appear to work
 
-### 1. Add hotkey to show/hide the Review popup
-In `src/components/demo/EmrDashboard.tsx`:
-- Add a `showReview` state (default `true`).
-- Add a global key listener for **F1** that toggles `showReview`.
-  - Only fire when the active element is not an editable field, or always treat F1 as a dedicated demo shortcut (typing focus is already inside the dictation input, and the panel toggle is more discoverable as a global key).
-  - Prevent the browser's default F1 help behavior with `event.preventDefault()`.
-- Wrap the `<ReviewTray … />` render so it only mounts when `showReview` is true.
-- Keep F2 (dictation) and existing 1/2/3/Enter/Esc handlers untouched — those live inside ReviewTray and only fire while it's mounted, which matches the "hidden = no shortcuts" behavior.
+The F1 keydown handler runs and flips `showReview`, but the Review Panel render is gated by a second condition:
 
-### 2. Fix false "not a medicine prescription" flags on words like "and", "with"
+```
+{showReview && (holdEntries.length > 0 || status === "listening"
+  || status === "connecting" || interim.length > 0) && <ReviewTray … />}
+```
 
-Root cause is in `src/components/demo/lexicon.ts` → `findMed()`. It runs a Levenshtein-≤2 fuzzy match against every med name and every alias. Short aliases collide with common English words:
-- `"and"` → alias `"asa"` (aspirin), distance 2 ⇒ flagged as med.
-- `"with"` → alias `"hctz"`/others within length ±2, distance ≤ 2 ⇒ flagged.
-- Similar collisions for `or`, `the`, `for`, `has`, `was`, `is`, `no`, etc.
+So if you press F1 while not dictating and with no held items, nothing renders — it looks like the hotkey is broken. Also, when the panel is already visible, F1 does hide it, but the next press won't bring it back unless one of those conditions is still true.
 
-Fixes in `lexicon.ts`:
+Additionally, some browsers/extensions swallow F1 before it reaches the window listener (built-in Help), which can make it feel intermittent.
 
-1. **Add a `STOPWORDS` set** of common English function words + narrative verbs/adjectives that must never resolve to a medication (and, or, with, without, the, a, an, is, was, were, be, been, being, has, have, had, do, does, did, for, to, of, in, on, at, by, from, that, this, these, those, but, not, no, we, he, she, it, they, i, you, patient, presents, reports, denies, states, notes, feels, complains, exam, exams, plan, note, follow, up, blood, pressure, heart, rate, chronic, acute, severe, mild, moderate, history, follow-up).
-2. **`findMed()` guardrails**:
-   - Lowercase the token, and if it's in `STOPWORDS`, return `null` immediately (before exact or fuzzy match).
-   - Keep exact match as-is.
-   - For fuzzy match: require **token length ≥ 5** AND **candidate token length ≥ 5**. For tokens length 5–6 require Levenshtein ≤ 1; for length ≥ 7 keep ≤ 2. This preserves real typo tolerance ("lisinopr" → "lisinopril") while eliminating 3-letter alias collisions like `"asa"`, `"ntg"`, `"hctz"`.
-3. **Belt-and-braces in `detectAll()`** med loop (line ~567): skip tokens where `STOPWORDS.has(tok.toLowerCase())` before calling `findMed`, so the same guard applies even if `findMed` is later reused elsewhere.
+## Fix
 
-No changes to verify.ts, Gemini prompt, or the Review UI itself. The Review tray will continue to show only real med/dose/LASA/low-confidence spans — which now excludes ordinary English words.
+1. **Make F1 an unconditional toggle of the panel's visibility.**
+   In `src/components/demo/EmrDashboard.tsx`, change the render gate to just `{showReview && <ReviewTray … />}`. The ReviewTray already handles the "nothing to review yet" empty state (it shows the transcript placeholder + "Transcript will appear here as you dictate…"). Default `showReview` stays `true`; F1 hides/shows regardless of dictation state.
+
+2. **Harden the F1 listener** so the browser can't preempt it and it works from inside textareas:
+   - Listen in the capture phase (`window.addEventListener("keydown", onKey, true)`) so it fires before the textarea/browser default.
+   - Call `e.preventDefault()` **and** `e.stopPropagation()`.
+   - Ignore when a modifier is held (so Ctrl+F1 etc. pass through).
+   - Same treatment for F2 for consistency.
+
+3. **Small affordance**: update the footer hint text near the dictation status to mention `F1 review · F2 dictate` so the shortcut is discoverable. (One-line copy change only.)
+
+No other files change. No logic changes to verification, formatting, lexicon, or dictation.
 
 ### Files touched
-- `src/components/demo/EmrDashboard.tsx` — F1 toggle + conditional ReviewTray mount.
-- `src/components/demo/lexicon.ts` — STOPWORDS set, tightened `findMed` fuzzy rules, stopword guard in `detectAll`.
+- `src/components/demo/EmrDashboard.tsx` — relax ReviewTray render gate to `showReview` only; harden F1/F2 keydown listener; minor footer hint copy.
