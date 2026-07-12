@@ -1,10 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Download, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { BookDemoDialog } from "@/components/BookDemoDialog";
-import whitepaperAsset from "@/assets/mayscribe-whitepaper.pdf.asset.json";
-
-const PDF_URL = whitepaperAsset.url;
 
 const DESCRIPTION =
   "Preview: self-hosted clinical dictation with zero audio retention, deterministic verification, and a clear compliance path.";
