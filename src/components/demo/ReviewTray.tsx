@@ -4,6 +4,7 @@ import type { Span } from "./verify";
 import {
   applyFormatToggles,
   applyDeterministicFormat,
+  deterministicClean,
   toAppliedPlainText,
   FORMAT_TOGGLES,
   type FormatToggle,
@@ -213,7 +214,17 @@ export function ReviewTray({
 }: Props) {
   const [portalReady, setPortalReady] = useState(false);
   const [tab, setTab] = useState<"items" | "format">("items");
-  const [toggles, setToggles] = useState<Set<FormatToggle>>(new Set());
+  const [toggles, setToggles] = useState<Set<FormatToggle>>(
+    () =>
+      new Set<FormatToggle>([
+        "punctuation",
+        "sentenceCase",
+        "unitsAndAbbrev",
+        "abbrevPlus",
+        "spelling",
+        "structure",
+      ]),
+  );
   const [preview, setPreview] = useState<{ before: string; after: string } | null>(
     null,
   );
@@ -280,7 +291,10 @@ export function ReviewTray({
       const det = new Set<FormatToggle>();
       (["punctuation", "unitsAndAbbrev", "sentenceCase", "abbrevPlus", "paragraphs"] as FormatToggle[])
         .forEach((t) => { if (toggles.has(t)) det.add(t); });
-      let out = applyDeterministicFormat(sectionText, det);
+
+      // Pre-clean: always-safe spacing/punctuation normalization.
+      let out = deterministicClean(sectionText);
+      out = applyDeterministicFormat(out, det);
 
       const wantLLM = toggles.has("spelling") || toggles.has("structure");
       if (wantLLM) {
@@ -299,6 +313,10 @@ export function ReviewTray({
           setWarning("Structure formatting unavailable for this pass.");
         }
       }
+
+      // Post-clean: normalize any spacing the LLM (or deterministic pass) left.
+      out = deterministicClean(out);
+
       setPreview({ before: sectionText, after: out });
     } finally {
       setBusy(false);

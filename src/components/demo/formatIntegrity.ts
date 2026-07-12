@@ -39,6 +39,27 @@ export interface ProtectedTokens {
   laterality: string[];
 }
 
+function normalizeUnit(u: string): string {
+  const s = u.toLowerCase().replace(/\./g, "");
+  // Collapse plural units (units -> unit, hrs -> hr) to base form.
+  const map: Record<string, string> = {
+    ml: "ml", milliliter: "ml", milliliters: "ml",
+    l: "l",
+    mg: "mg", milligram: "mg", milligrams: "mg",
+    mcg: "mcg", microgram: "mcg", micrograms: "mcg",
+    g: "g", gram: "g", grams: "g",
+    kg: "kg",
+    units: "unit", unit: "unit",
+    hours: "hr", hour: "hr", hrs: "hr", hr: "hr",
+    minutes: "min", minute: "min", mins: "min", min: "min",
+    days: "day", day: "day",
+    weeks: "wk", week: "wk", wks: "wk", wk: "wk",
+    months: "mo", month: "mo", mos: "mo", mo: "mo",
+    years: "yr", year: "yr", yrs: "yr", yr: "yr",
+  };
+  return map[s] ?? s;
+}
+
 export function extractProtectedTokens(text: string): ProtectedTokens {
   const unitPairs: string[] = [];
   const numbers: string[] = [];
@@ -51,7 +72,8 @@ export function extractProtectedTokens(text: string): ProtectedTokens {
 
   UNIT_RE.lastIndex = 0;
   while ((m = UNIT_RE.exec(text)) !== null) {
-    unitPairs.push(`${m[1]} ${m[2]!.toLowerCase()}`);
+    // Normalize: collapse whitespace and unify unit form so "5mg" == "5 mg".
+    unitPairs.push(`${m[1]} ${normalizeUnit(m[2]!)}`);
     seenSpans.push([m.index, m.index + m[0].length]);
   }
 
