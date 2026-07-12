@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WhitepaperRouteImport } from './routes/whitepaper'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DemoIndexRouteImport } from './routes/demo/index'
+import { Route as DemoUnlockRouteImport } from './routes/demo/unlock'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 
 const WhitepaperRoute = WhitepaperRouteImport.update({
@@ -29,6 +31,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoIndexRoute = DemoIndexRouteImport.update({
+  id: '/demo/',
+  path: '/demo/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoUnlockRoute = DemoUnlockRouteImport.update({
+  id: '/demo/unlock',
+  path: '/demo/unlock',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LovableEmailTransactionalPreviewRoute =
   LovableEmailTransactionalPreviewRouteImport.update({
     id: '/lovable/email/transactional/preview',
@@ -40,12 +52,16 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/demo/unlock': typeof DemoUnlockRoute
+  '/demo/': typeof DemoIndexRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/demo/unlock': typeof DemoUnlockRoute
+  '/demo': typeof DemoIndexRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesById {
@@ -53,6 +69,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/demo/unlock': typeof DemoUnlockRoute
+  '/demo/': typeof DemoIndexRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRouteTypes {
@@ -61,18 +79,24 @@ export interface FileRouteTypes {
     | '/'
     | '/sitemap.xml'
     | '/whitepaper'
+    | '/demo/unlock'
+    | '/demo/'
     | '/lovable/email/transactional/preview'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/sitemap.xml'
     | '/whitepaper'
+    | '/demo/unlock'
+    | '/demo'
     | '/lovable/email/transactional/preview'
   id:
     | '__root__'
     | '/'
     | '/sitemap.xml'
     | '/whitepaper'
+    | '/demo/unlock'
+    | '/demo/'
     | '/lovable/email/transactional/preview'
   fileRoutesById: FileRoutesById
 }
@@ -80,6 +104,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   WhitepaperRoute: typeof WhitepaperRoute
+  DemoUnlockRoute: typeof DemoUnlockRoute
+  DemoIndexRoute: typeof DemoIndexRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
 }
 
@@ -106,6 +132,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/demo/': {
+      id: '/demo/'
+      path: '/demo'
+      fullPath: '/demo/'
+      preLoaderRoute: typeof DemoIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/unlock': {
+      id: '/demo/unlock'
+      path: '/demo/unlock'
+      fullPath: '/demo/unlock'
+      preLoaderRoute: typeof DemoUnlockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lovable/email/transactional/preview': {
       id: '/lovable/email/transactional/preview'
       path: '/lovable/email/transactional/preview'
@@ -120,6 +160,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   WhitepaperRoute: WhitepaperRoute,
+  DemoUnlockRoute: DemoUnlockRoute,
+  DemoIndexRoute: DemoIndexRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
 }
 export const routeTree = rootRouteImport

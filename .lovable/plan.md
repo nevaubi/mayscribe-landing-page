@@ -1,49 +1,51 @@
-## Scope
+## Goal
+Add `/demo` on the main site, gated by a passcode. Passcodes live in a new database table (hashed) so you can add/rotate them over time. First passcode: `ForDadRoseland`. After unlock, land on a blank page.
 
-1. **Rename** `/whitepaper` page and CTAs to **"Whitepaper preview"**.
-2. **Replace** all page content with the 9 sections from the uploaded PDF (`Clinical-Dictation-Without-the-Cloud.pdf`), matching the PDF's structure, section labels, stats, tables, and closing block.
-3. **Restyle** the page to echo the PDF's editorial layout (kicker labels, big serif-style titles, stat blocks, threat/comparison tables, numbered checklist, closing "Built to be audited" block). All within existing MayScribe design tokens.
+## Database
 
-## Rename changes
+New table `public.demo_passcodes`:
+- `id uuid pk`
+- `label text` — human note ("Roseland demo", etc.)
+- `passcode_hash text not null` — bcrypt hash via `pgcrypto`'s `crypt()`
+- `is_active boolean not null default true`
+- `expires_at timestamptz null`
+- `created_at`, `updated_at` timestamps
 
-- `src/routes/index.tsx`
-  - Hero button label → **"Whitepaper preview"** (both instances of "Read the whitepaper")
-  - CTA band button → **"Whitepaper preview"**
-  - Footer link text → **"Whitepaper preview"**
-- `src/routes/whitepaper.tsx`
-  - Sticky top-bar title / kicker: **"Whitepaper preview"**
-  - `head()` title/description updated (still under 60/160 chars)
-  - JSON-LD `Article` name updated
-- `Download PDF` button: keep pointing to the existing CDN asset (`src/assets/mayscribe-whitepaper.pdf.asset.json`) — I will NOT swap the underlying PDF in this change. If you want the download to serve the new preview PDF, tell me and I'll upload it via `lovable-assets` in the same edit.
+Security model:
+- Enable `pgcrypto`.
+- RLS ON. No `anon` or `authenticated` grants for SELECT — nobody can read hashes from the client.
+- `GRANT ALL ... TO service_role` only.
+- SECURITY DEFINER function `public.verify_demo_passcode(input text) returns boolean` that runs `SELECT 1 FROM demo_passcodes WHERE is_active AND (expires_at IS NULL OR expires_at > now()) AND passcode_hash = crypt(input, passcode_hash)`. `GRANT EXECUTE` to `anon, authenticated` so the server function can call it via the publishable client without leaking the table.
+- Seed row: `insert ... crypt('ForDadRoseland', gen_salt('bf'))` with label "Initial".
 
-## New page structure (matches PDF page-by-page)
+To add/rotate passcodes later, you'll run a small insert (I can add a simple admin script or you can do it from Cloud SQL).
 
-Each section rendered as a `<section>` with a small blue kicker, an H2 title, and body. Uses existing tokens (`--ink`, `--ink-2`, `--brand`, `--hero`, `--border-default`, chip colors).
+## Server functions (`src/lib/demo-gate.functions.ts`)
 
-1. **Hero** — Kicker "WHITEPAPER (PREVIEW) · JULY 2026". Title "Clinical Dictation, Without the Vendor Risk". Subtitle from PDF. Three feature tiles (Zero Audio Retention / Self-Hosted in Your VPC / Deterministic Clinical Verification). Italic "Prepared for:" line under a hairline divider.
-2. **Overview** — "The Case for Keeping Dictation Inside Your Own Walls" + two paragraphs + pull-quote card.
-3. **The Problem** — Three big stat blocks (96.3%, 30,000+, $7.42M) with citations, then three subsections (errors frequent, newer models fabricate, cloud concentration).
-4. **Security Architecture** — Intro + 4 architecture cards (Deployed Inside Your Own Cloud / Zero Audio Retention / Tamper-Proof Audit Trail / Hash-Pinned Model Integrity). "Threat Model" table (6 rows).
-5. **Compliance** — HIPAA Alignment Today + SOC 2 Roadmap side-by-side. Numbered "6 Questions to Ask Any Dictation Vendor" list + MayScribe answers line.
-6. **Performance** — 3 stat blocks (~0.4s / 2-Pass / 0 Retention). Six pipeline-step cards (Clinician Speaks → Pass 1 → Pass 2 → Verification Layer → Commit or Hold → Text at Cursor).
-7. **Clinical Accuracy** — Intro + 3 subsections. Error-category table with a horizontal bar (CSS width % from score) for each of the 7 rows.
-8. **Pricing & Scale** — Intro + 3 subsections. Comparison table (Cloud Dictation vs MayScribe) across 6 dimensions.
-9. **Closing** — "Built to Be Audited. Designed to Be Trusted." + 3 tile block (Security Whitepaper / Control Matrix / Pilot Validation) + italic footnote.
+Two secrets:
+- `DEMO_SESSION_SECRET` — 32+ char random, minted via `generate_secret` (no user input).
 
-Existing Table of Contents in the sticky/side rail is regenerated to point at these 9 sections. References section from the current page is removed (the PDF cites sources inline as "JAMA Network Open, 2018", "AP, Oct 2024", "IBM, 2025" — these appear inline in Section 3).
+Functions:
+- `unlockDemo({ passcode })` — calls `verify_demo_passcode` RPC via a server-side publishable-key Supabase client. On success, `useSession` sets encrypted cookie `demo-gate` (`unlocked: true`, `maxAge: 7 days`, httpOnly, secure, sameSite=lax). Rate-limit-friendly: constant-time DB comparison, generic error on failure.
+- `isDemoUnlocked()` — reads session; returns boolean. Used by the `/demo` loader; throws `redirect({ to: "/demo/unlock" })` when false.
+- `lockDemo()` — clears session (for later).
 
-## Style notes
+## Routes
 
-- Match PDF visual hierarchy: uppercase blue kicker, large title, generous whitespace between sections.
-- Stat blocks: large ink number, small caption below, muted citation.
-- Tables: hairline borders `--border-hair`, alternating row background `--row-bg`, semibold ink for headers.
-- Bar chart in section 7: div with `background: var(--chip-blue-bg)`, inner fill `background: var(--brand)`, width `${score}%`.
-- Keep sticky top bar with "Download PDF" and "Book a demo" actions.
-- All in one file (`src/routes/whitepaper.tsx`) — no new components file.
+- `src/routes/demo/unlock.tsx` — public. Centered card matching brand tokens (Inter, `#F8FBFF` bg, `#061338` ink, `#0D57FA` accent). One password field, submit button, generic error on wrong passcode. Calls `unlockDemo` via `useServerFn`; on success, `navigate({ to: "/demo" })`. `head()` sets title + `noindex,nofollow`.
+- `src/routes/demo/index.tsx` — loader calls `isDemoUnlocked()` (redirects to `/demo/unlock` if not). Component renders a truly blank page (`<main />` with just a page background). `head()` sets title "MayScribe Demo" and `noindex,nofollow`.
 
-## Out of scope
+Neither is added to `sitemap.xml`. `robots.txt` gets `Disallow: /demo` and `Disallow: /demo/unlock`.
 
-- Not replacing the downloadable PDF binary (unless you say so).
-- No changes to the landing page hero visuals, compliance/security/CTA sections, or backend.
+## What stays unchanged
+- No landing-page changes; `/demo` is separate from the marketing site.
+- No new UI on the post-auth page yet — intentionally blank so we can drop content in later.
 
-Confirm and I'll implement.
+## Ordering
+1. Migration (table + grants + RLS + `verify_demo_passcode` + seed row). You approve it.
+2. `generate_secret` for `DEMO_SESSION_SECRET`.
+3. Server functions + routes + robots update.
+
+## Questions before I build
+1. Confirm the seed passcode is exactly `ForDadRoseland` (case-sensitive as written).
+2. Should the seed row have an `expires_at`, or leave it null (never expires until you deactivate it)?
