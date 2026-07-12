@@ -249,6 +249,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
       let msg: {
         type?: string;
         is_final?: boolean;
+        speech_final?: boolean;
         channel?: {
           alternatives?: Array<{ transcript?: string; words?: DGWord[] }>;
         };
@@ -256,6 +257,10 @@ export function useDictation(opts: UseDictationOptions = {}) {
       try {
         msg = JSON.parse(ev.data);
       } catch {
+        return;
+      }
+      if (msg.type === "UtteranceEnd") {
+        optsRef.current.onUtteranceEnd?.();
         return;
       }
       if (msg.type === "Results") {
@@ -267,7 +272,9 @@ export function useDictation(opts: UseDictationOptions = {}) {
           const last = lastFinalRef.current;
           if (last && last.text === transcript && now - last.at < 1500) return;
           lastFinalRef.current = { text: transcript, at: now };
-          optsRef.current.onFinal?.(transcript, alt?.words ?? []);
+          optsRef.current.onFinal?.(transcript, alt?.words ?? [], {
+            speechFinal: Boolean(msg.speech_final),
+          });
         } else {
           optsRef.current.onInterim?.(transcript);
         }
