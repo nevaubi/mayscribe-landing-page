@@ -235,6 +235,7 @@ export function EmrDashboard() {
     { section: SoapSection; start: number; end: number } | null
   >(null);
   const [signPulse, setSignPulse] = useState(false);
+  const [showReview, setShowReview] = useState(true);
 
   const activeSectionRef = useRef<SoapSection>("subjective");
   activeSectionRef.current = activeSoapSection;
