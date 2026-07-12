@@ -313,15 +313,19 @@ function Hero() {
             </div>
           </div>
 
-          <div className="hidden md:block lg:col-span-7 relative">
-            <WorkspaceCard />
-            {/* Floating dictation - overlaps left edge */}
-            <div className="absolute -left-6 top-32 z-10">
-              <FloatingDictation />
-            </div>
-            {/* Suggested meds - overlaps bottom right */}
-            <div className="absolute -right-4 bottom-20 z-10">
-              <SuggestedMeds />
+          <div className="hidden md:block lg:col-span-7">
+            <div className="relative lg:mb-[-160px]">
+              <div className="relative w-full lg:scale-[0.75] lg:origin-top">
+                <WorkspaceCard />
+                {/* Floating dictation - overlaps left edge */}
+                <div className="absolute -left-6 top-32 z-10">
+                  <FloatingDictation />
+                </div>
+                {/* Suggested meds - overlaps bottom right */}
+                <div className="absolute -right-4 bottom-20 z-10">
+                  <SuggestedMeds />
+                </div>
+              </div>
             </div>
           </div>
         </div>
