@@ -215,8 +215,25 @@ export function EmrDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [interim, setInterim] = useState("");
   const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [flashSection, setFlashSection] = useState<SoapSection | null>(null);
   const [lastCommitAt, setLastCommitAt] = useState<Date | null>(null);
+
+  // Verification anchors — track holds and dismissed spans per section
+  interface Anchor {
+    id: string;
+    section: SoapSection;
+    start: number;
+    end: number;
+    span: Span;
+    rawText: string;
+    state: "hold" | "dismissed" | "resolved";
+  }
+  const [anchors, setAnchors] = useState<Anchor[]>([]);
+  const [activeHoldIndex, setActiveHoldIndex] = useState(0);
+  const [verifyStats, setVerifyStats] = useState({ checked: 0, held: 0 });
+  const [flashRange, setFlashRange] = useState<
+    { section: SoapSection; start: number; end: number } | null
+  >(null);
+  const [signPulse, setSignPulse] = useState(false);
 
   const activeSectionRef = useRef<SoapSection>("subjective");
   activeSectionRef.current = activeSoapSection;
@@ -233,6 +250,11 @@ export function EmrDashboard() {
     assessment: null,
     plan: null,
   });
+  const soapRef = useRef(soap);
+  soapRef.current = soap;
+  const anchorsRef = useRef(anchors);
+  anchorsRef.current = anchors;
+  const prevSoapRef = useRef<Record<SoapSection, string>>(soap);
 
   const syncCaretFromElement = useCallback((el: HTMLTextAreaElement) => {
     const section = el.dataset.soapSection as SoapSection | undefined;
@@ -256,23 +278,93 @@ export function EmrDashboard() {
     }
   }, [syncCaretFromElement]);
 
-  const commitFinal = useCallback((text: string) => {
-    const section = dictationTargetRef.current || activeSectionRef.current;
-    setInterim("");
-    setSoap((prev) => {
-      const current = prev[section] ?? "";
+  const openHolds = useMemo(
+    () => anchors.filter((a) => a.state === "hold"),
+    [anchors],
+  );
+
+  const holdEntries: HoldEntry[] = useMemo(
+    () =>
+      openHolds.map((a) => ({
+        anchorId: a.id,
+        section: a.section,
+        span: a.span,
+        start: a.start,
+        end: a.end,
+        rawText: a.rawText,
+      })),
+    [openHolds],
+  );
+
+  const commitFinal = useCallback(
+    (text: string, words: DGWord[], meta: { speechFinal: boolean }) => {
+      const section = dictationTargetRef.current || activeSectionRef.current;
+      setInterim("");
+      const current = soapRef.current[section] ?? "";
       const caret = Math.min(
         Math.max(0, caretRef.current[section] ?? current.length),
         current.length,
       );
-      const before = current.slice(0, caret);
+      let before = current.slice(0, caret);
       const after = current.slice(caret);
-      const insert = prepareDictationInsert(text, before, after);
-      if (!insert) return prev;
-      const nextValue = before + insert + after;
+
+      // Sentence-close prior committed text if utterance is finished
+      let leadPrefix = "";
+      if (meta.speechFinal && /[A-Za-z0-9]$/.test(before)) {
+        leadPrefix = ".";
+        before = before + leadPrefix;
+      }
+
+      const formatted = formatDictationInsert(text, before);
+      if (!formatted) return;
+
+      const { spans, committedText } = verify(formatted, words);
+      const insert = leadPrefix + committedText;
+      const nextValue = before.slice(0, before.length - leadPrefix.length) + insert + after;
+
+      // Build anchors for holds
+      const insertOffset = caret; // where committedText starts in section (after leadPrefix)
+      const holdSpans = spans.filter((s) => s.status === "hold");
+      const newAnchors: Anchor[] = holdSpans.map((s) => ({
+        id: s.id,
+        section,
+        // committedText has same length as formatted (placeholders replace 1:1)
+        start: insertOffset + leadPrefix.length + s.start,
+        end: insertOffset + leadPrefix.length + s.end,
+        span: s,
+        rawText: s.text,
+        state: "hold",
+      }));
+
+      // Shift existing anchors past caret by insert length
+      const shiftAmount = insert.length;
+      const updatedAnchors = anchorsRef.current.map((a) =>
+        a.section === section && a.start >= caret
+          ? { ...a, start: a.start + shiftAmount, end: a.end + shiftAmount }
+          : a,
+      );
+
       const nextCaret = caret + insert.length;
       caretRef.current[section] = nextCaret;
-      // restore focus/caret after React paints the controlled textarea value
+
+      setSoap((prev) => ({ ...prev, [section]: nextValue }));
+      prevSoapRef.current = { ...prevSoapRef.current, [section]: nextValue };
+      setAnchors([...updatedAnchors, ...newAnchors]);
+      setVerifyStats((s) => ({
+        checked: s.checked + spans.length,
+        held: s.held + holdSpans.length,
+      }));
+
+      // Range flash on committed (non-hold) portion
+      setFlashRange({
+        section,
+        start: insertOffset + leadPrefix.length,
+        end: insertOffset + leadPrefix.length + committedText.length,
+      });
+      setLastCommitAt(new Date());
+      window.setTimeout(() => setFlashRange(null), 600);
+
+      // Restore caret
       window.requestAnimationFrame(() => {
         const el = textareaRefs.current[section];
         if (el) {
@@ -281,18 +373,105 @@ export function EmrDashboard() {
           el.selectionEnd = nextCaret;
         }
       });
-      return { ...prev, [section]: nextValue };
-    });
-    setFlashSection(section);
-    setLastCommitAt(new Date());
-    window.setTimeout(() => {
-      setFlashSection((s: SoapSection | null) => (s === section ? null : s));
-    }, 600);
-  }, []);
+
+      // Async Gemini assist — may upgrade commits to holds within 2s
+      const deterministicSpans = spans.map((s) => ({
+        text: s.text,
+        start: s.start,
+        end: s.end,
+        type: s.type,
+        status: s.status,
+        candidates: s.candidates,
+        reason: s.reason,
+      }));
+      void dictationAssist({
+        data: {
+          transcript: formatted,
+          spans: deterministicSpans,
+          activeMeds: DEMO_ACTIVE_MEDS,
+        },
+      })
+        .then((r) => {
+          if (!r || !("ok" in r) || !r.ok) return;
+          const result = r.result as {
+            spans?: Array<{
+              text: string;
+              start: number;
+              end: number;
+              type: string;
+              needsReview?: boolean;
+              candidates?: string[];
+              reason?: string;
+            }>;
+          };
+          const gspans = result.spans ?? [];
+          // Only apply new holds Gemini added inside its own window that aren't already held
+          for (const g of gspans) {
+            if (!g.needsReview) continue;
+            const already = anchorsRef.current.some(
+              (a) =>
+                a.section === section &&
+                a.start === insertOffset + leadPrefix.length + g.start &&
+                a.end === insertOffset + leadPrefix.length + g.end,
+            );
+            if (already) continue;
+            // Splice text back to placeholder
+            const absStart = insertOffset + leadPrefix.length + g.start;
+            const absEnd = insertOffset + leadPrefix.length + g.end;
+            const sectionText = soapRef.current[section] ?? "";
+            if (absEnd > sectionText.length) continue;
+            const placeholder = "_".repeat(Math.max(1, absEnd - absStart));
+            const nextText =
+              sectionText.slice(0, absStart) + placeholder + sectionText.slice(absEnd);
+            setSoap((prev) => ({ ...prev, [section]: nextText }));
+            prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+            const newSpan: Span = {
+              id: `gem-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              text: g.text,
+              start: g.start,
+              end: g.end,
+              type: "med",
+              status: "hold",
+              candidates: g.candidates ?? [g.text],
+              reason: g.reason ?? "Assist review",
+              minConfidence: 1,
+            };
+            setAnchors((prev) => [
+              ...prev,
+              {
+                id: newSpan.id,
+                section,
+                start: absStart,
+                end: absEnd,
+                span: newSpan,
+                rawText: g.text,
+                state: "hold",
+              },
+            ]);
+            setVerifyStats((s) => ({ checked: s.checked, held: s.held + 1 }));
+          }
+        })
+        .catch(() => {
+          // 2s timeout or bad JSON — silent, deterministic result unchanged
+        });
+    },
+    [],
+  );
 
   const dictation = useDictation({
     onInterim: (t) => setInterim(t),
-    onFinal: (t) => commitFinal(t),
+    onFinal: (t, w, meta) => commitFinal(t, w, meta),
+    onUtteranceEnd: () => {
+      // Sentence-close on utterance end
+      const section = dictationTargetRef.current;
+      const current = soapRef.current[section] ?? "";
+      if (/[A-Za-z0-9]$/.test(current)) {
+        const nextText = current + ".";
+        setSoap((prev) => ({ ...prev, [section]: nextText }));
+        prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+        caretRef.current[section] = nextText.length;
+      }
+    },
     onError: () => setInterim(""),
   });
 
