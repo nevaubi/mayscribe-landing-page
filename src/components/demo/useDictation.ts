@@ -29,6 +29,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const [expired, setExpired] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const statusRef = useRef<DictationStatus>("idle");
+  const sessionRef = useRef(0);
   const socketRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -36,6 +38,11 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const levelTimerRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
+
+  const setDictationStatus = useCallback((next: DictationStatus) => {
+    statusRef.current = next;
+    setStatus(next);
+  }, []);
 
   const cleanup = useCallback(() => {
     if (levelTimerRef.current) {
@@ -72,29 +79,86 @@ export function useDictation(opts: UseDictationOptions = {}) {
   }, []);
 
   const stop = useCallback(() => {
+    sessionRef.current += 1;
     stoppingRef.current = true;
     cleanup();
-    setStatus("idle");
+    setErrorMessage(null);
+    setExpired(false);
+    setDictationStatus("idle");
     stoppingRef.current = false;
-  }, [cleanup]);
+  }, [cleanup, setDictationStatus]);
 
   const fail = useCallback(
-    (msg: string) => {
-      setErrorMessage(msg);
-      setStatus("error");
-      optsRef.current.onError?.(msg);
+    (sessionId: number, msg: string, isExpired = false) => {
+      if (sessionId !== sessionRef.current) return;
+      stoppingRef.current = true;
       cleanup();
+      sessionRef.current += 1;
+      stoppingRef.current = false;
+      setErrorMessage(msg);
+      setExpired(isExpired);
+      setDictationStatus("error");
+      optsRef.current.onError?.(msg);
     },
-    [cleanup],
+    [cleanup, setDictationStatus],
   );
 
   const start = useCallback(async () => {
-    if (status === "connecting" || status === "listening") return;
+    if (
+      statusRef.current === "connecting" ||
+      statusRef.current === "listening"
+    ) {
+      return;
+    }
+
+    cleanup();
+    const sessionId = sessionRef.current + 1;
+    sessionRef.current = sessionId;
+    stoppingRef.current = false;
     setErrorMessage(null);
     setExpired(false);
-    setStatus("connecting");
+    setDictationStatus("connecting");
 
-    // 1) token
+    // 1) mic — request this first so the call remains tied to the user gesture.
+    let stream: MediaStream;
+    try {
+      if (navigator.permissions?.query) {
+        try {
+          const permission = await navigator.permissions.query({
+            name: "microphone" as PermissionName,
+          });
+          if (permission.state === "denied") {
+            fail(sessionId, "Microphone blocked — enable it in the browser bar");
+            return;
+          }
+        } catch {
+          // Safari does not support microphone permission queries.
+        }
+      }
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+    } catch (e: unknown) {
+      const err = e as { name?: string };
+      if (err?.name === "NotAllowedError" || err?.name === "SecurityError") {
+        fail(sessionId, "Microphone blocked — enable it in the browser bar");
+      } else if (err?.name === "NotFoundError") {
+        fail(sessionId, "No microphone found");
+      } else if (err?.name === "NotReadableError") {
+        fail(sessionId, "Microphone is in use by another app");
+      } else {
+        fail(sessionId, "Microphone unavailable");
+      }
+      return;
+    }
+
+    if (sessionId !== sessionRef.current) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    streamRef.current = stream;
+
+    // 2) token
     let accessToken: string;
     try {
       const res = await fetch("/api/deepgram-token", {
@@ -106,30 +170,16 @@ export function useDictation(opts: UseDictationOptions = {}) {
         console.error("[dictation] token endpoint failed", res.status, text);
         throw new Error(`token ${res.status}`);
       }
-      const j = JSON.parse(text) as { access_token: string };
+      const j = JSON.parse(text) as { access_token?: string };
+      if (!j.access_token) throw new Error("missing token");
       accessToken = j.access_token;
     } catch (e) {
       console.error("[dictation] token fetch error", e);
-      fail("Dictation unavailable — retry");
+      fail(sessionId, "Dictation unavailable — retry");
       return;
     }
 
-    // 2) mic
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
-    } catch (e: unknown) {
-      const err = e as { name?: string };
-      if (err?.name === "NotAllowedError" || err?.name === "SecurityError") {
-        fail("Microphone blocked — enable it in the browser bar");
-      } else {
-        fail("Microphone unavailable");
-      }
-      return;
-    }
-    streamRef.current = stream;
+    if (sessionId !== sessionRef.current) return;
 
     // Audio analyser for level
     try {
@@ -164,34 +214,43 @@ export function useDictation(opts: UseDictationOptions = {}) {
     try {
       socket = new WebSocket(DG_URL, ["bearer", accessToken]);
     } catch {
-      fail("Dictation unavailable — retry");
+      fail(sessionId, "Dictation unavailable — retry");
       return;
     }
     socketRef.current = socket;
     socket.binaryType = "arraybuffer";
 
     socket.onopen = () => {
-      setStatus("listening");
+      if (sessionId !== sessionRef.current) {
+        socket.close();
+        return;
+      }
+      setDictationStatus("listening");
       try {
-        const mimeType = "audio/webm;codecs=opus";
+        const preferredType = "audio/webm;codecs=opus";
+        const mimeType = MediaRecorder.isTypeSupported(preferredType)
+          ? preferredType
+          : "audio/webm";
         const rec = new MediaRecorder(stream, { mimeType });
         recorderRef.current = rec;
         rec.ondataavailable = (ev) => {
           if (
             ev.data &&
             ev.data.size > 0 &&
+            sessionId === sessionRef.current &&
             socket.readyState === WebSocket.OPEN
           ) {
             socket.send(ev.data);
           }
         };
-        rec.start(250);
+        rec.start(150);
       } catch {
-        fail("Recorder unsupported in this browser");
+        fail(sessionId, "Recorder unsupported in this browser");
       }
     };
 
     socket.onmessage = (ev) => {
+      if (sessionId !== sessionRef.current) return;
       if (typeof ev.data !== "string") return;
       let msg: {
         type?: string;
@@ -219,22 +278,25 @@ export function useDictation(opts: UseDictationOptions = {}) {
 
     socket.onerror = (ev) => {
       console.error("[dictation] socket error", ev);
-      if (stoppingRef.current) return;
-      fail("Dictation connection error");
+      if (stoppingRef.current || sessionId !== sessionRef.current) return;
+      fail(sessionId, "Dictation connection error");
     };
 
     socket.onclose = (ev) => {
       console.warn("[dictation] socket close", ev.code, ev.reason);
-      if (stoppingRef.current) return;
+      if (stoppingRef.current || sessionId !== sessionRef.current) return;
       if (ev.code === 1008 || ev.code === 4001 || ev.code === 4008) {
-        setExpired(true);
-        fail("Session expired — press F2 to resume");
+        fail(sessionId, "Session expired — press F2 to resume", true);
+        return;
+      }
+      if (ev.code !== 1000 && ev.code !== 1005) {
+        fail(sessionId, "Dictation disconnected — press F2 to retry");
         return;
       }
       cleanup();
-      setStatus("idle");
+      setDictationStatus("idle");
     };
-  }, [cleanup, fail, status]);
+  }, [cleanup, fail, setDictationStatus]);
 
   useEffect(() => {
     return () => {
