@@ -38,6 +38,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const levelTimerRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
+  const lastFinalRef = useRef<{ text: string; at: number } | null>(null);
 
   const setDictationStatus = useCallback((next: DictationStatus) => {
     statusRef.current = next;
@@ -117,6 +118,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
     stoppingRef.current = false;
     setErrorMessage(null);
     setExpired(false);
+    lastFinalRef.current = null;
     setDictationStatus("connecting");
 
     // 1) mic — request this first so the call remains tied to the user gesture.
@@ -256,6 +258,10 @@ export function useDictation(opts: UseDictationOptions = {}) {
         const transcript = (alt?.transcript || "").trim();
         if (!transcript) return;
         if (msg.is_final) {
+          const now = Date.now();
+          const last = lastFinalRef.current;
+          if (last && last.text === transcript && now - last.at < 1500) return;
+          lastFinalRef.current = { text: transcript, at: now };
           optsRef.current.onFinal?.(transcript, alt?.words ?? []);
         } else {
           optsRef.current.onInterim?.(transcript);

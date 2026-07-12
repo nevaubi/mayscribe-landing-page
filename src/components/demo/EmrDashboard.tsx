@@ -174,6 +174,7 @@ export function EmrDashboard() {
 
   const activeSectionRef = useRef<SoapSection>("subjective");
   activeSectionRef.current = activeSoapSection;
+  const dictationTargetRef = useRef<SoapSection>("subjective");
   const caretRef = useRef<Record<SoapSection, number>>({
     subjective: 0,
     objective: 0,
@@ -210,7 +211,7 @@ export function EmrDashboard() {
   }, [syncCaretFromElement]);
 
   const commitFinal = useCallback((text: string) => {
-    const section = activeSectionRef.current;
+    const section = dictationTargetRef.current || activeSectionRef.current;
     setInterim("");
     setSoap((prev) => {
       const current = prev[section] ?? "";
@@ -257,6 +258,7 @@ export function EmrDashboard() {
       setInterim("");
     } else {
       captureActiveCaret();
+      dictationTargetRef.current = activeSectionRef.current;
       setInterim("");
       setStartedAt(Date.now());
       void start();
