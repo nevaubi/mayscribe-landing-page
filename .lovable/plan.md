@@ -1,28 +1,17 @@
-## Demo page polish + mobile gate
+## Demo page: scroll snap + EMR placeholder
 
-### 1. Hide scrollbar in EMR left sidebar
-In `src/components/demo/EmrDashboard.tsx`, find the left sidebar scroll container and add a `no-scrollbar` utility (hides scrollbar in WebKit/Firefox while keeping scroll functional). Register the utility in `src/styles.css`:
-```css
-@utility no-scrollbar {
-  scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
-}
-```
+### 1. Anchored scrolling on `/demo` (desktop only)
+In `src/routes/demo/index.tsx`:
+- Make the desktop `<main>` a scroll-snap container: apply `lg:snap-y lg:snap-proximity` and set it to `h-screen overflow-y-auto` on `lg` so the page owns the scroll (required for snap to feel "sticky"). Keep mobile as normal flow.
+- Wrap the EMR frame in a snap section: `lg:snap-center lg:snap-always min-h-screen flex items-center justify-center` so once the user scrolls the EMR into view, proximity snap gently pulls it to vertical center and small trackpad flicks don't drift it off-center.
+- Wrap the title block in its own `lg:snap-start` section so it still gets a natural resting point at the top.
 
-### 2. Refine `/demo` page layout (`src/routes/demo/index.tsx`)
-- Replace the plain "Test below" header with a cleaner, more polished title block:
-  - Small kicker "DEMO" (Inter Bold 11px, tracked, `#0D57FA`)
-  - H1 "MayScribe EMR preview" (Inter Semibold ~24px, `#061338`)
-  - One-line subtext "Interactive mock — explore the workspace below." (14px, `#46587E`)
-  - Tighter vertical rhythm, ~32px gap from title block to the EMR frame
-- Center the EMR mock inside a `max-w-[1200px]` container with `px-6 lg:px-10` side padding
-- Scale the EMR component down to ~90% via a `transform scale-[0.9] origin-top` wrapper (with matching negative margin to remove the transform gap), so it feels less bulky while keeping proportions
-- Add generous bottom padding so it doesn't hug the viewport edge
+Net effect: on large screens, quick up/down scrolls settle onto either the title or the centered EMR instead of landing between them. No JS, pure CSS scroll-snap.
 
-### 3. Mobile gate for demo routes
-Both `src/routes/demo/index.tsx` and `src/routes/demo/unlock.tsx`:
-- Wrap page content with a responsive guard: on `< lg` breakpoints, render only a centered card with the text **"Must use desktop for demo access"** (styled with existing brand tokens — Ink title, secondary body). Hide the actual EMR/unlock UI on mobile with `hidden lg:block`.
-- Keeps the passcode gate and EMR intact on desktop; mobile visitors always see the notice.
+### 2. EMR note field: empty with dictation placeholder
+In `src/components/demo/EmrDashboard.tsx`:
+- Update the initial `soap` state so all four sections (`subjective`, `objective`, `assessment`, `plan`) start as empty strings.
+- Add `placeholder="Make sure your mic is enabled. Press Ctrl + space to dictate."` to the `<textarea>` (line 363) so the light placeholder shows on whichever SOAP tab is active until the user types.
 
 ### Scope
-Presentation-only changes. No auth, server function, or EMR data changes.
+Presentation-only. No routing, auth, or data changes.
