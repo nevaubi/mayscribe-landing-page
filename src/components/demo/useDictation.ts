@@ -342,6 +342,20 @@ export function useDictation(opts: UseDictationOptions = {}) {
         return;
       }
       setDictationStatus("listening");
+
+      if (useWorklet && workletNodeRef.current) {
+        workletNodeRef.current.port.onmessage = (ev: MessageEvent) => {
+          if (
+            sessionId !== sessionRef.current ||
+            socket.readyState !== WebSocket.OPEN
+          )
+            return;
+          const buf = ev.data as ArrayBuffer;
+          if (buf && buf.byteLength) socket.send(buf);
+        };
+        return;
+      }
+
       try {
         const preferredType = "audio/webm;codecs=opus";
         const mimeType = MediaRecorder.isTypeSupported(preferredType)
