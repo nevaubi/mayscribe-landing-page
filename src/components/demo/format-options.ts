@@ -69,7 +69,7 @@ export const ABBREVIATIONS: Record<string, string> = {
   "hct": "Hct", "hematocrit": "Hct", "plt": "Plt", "platelets": "Plt",
   "mcv": "MCV", "mch": "MCH", "mchc": "MCHC", "rdw": "RDW",
   // Labs (coag)
-  "inr": "INR", "pt": "PT", "ptt": "PTT", "aptt": "aPTT",
+  "inr": "INR", "ptt": "PTT", "aptt": "aPTT",
   // Labs (LFT / lipids / cardiac / endocrine / renal)
   "ast": "AST", "alt": "ALT", "alp": "ALP", "alkphos": "ALP",
   "tbili": "T. bili", "total bilirubin": "T. bili", "dbili": "D. bili",
