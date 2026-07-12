@@ -101,10 +101,15 @@ export function useDictation(opts: UseDictationOptions = {}) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (!res.ok) throw new Error(`token ${res.status}`);
-      const j = (await res.json()) as { access_token: string };
+      const text = await res.text();
+      if (!res.ok) {
+        console.error("[dictation] token endpoint failed", res.status, text);
+        throw new Error(`token ${res.status}`);
+      }
+      const j = JSON.parse(text) as { access_token: string };
       accessToken = j.access_token;
     } catch (e) {
+      console.error("[dictation] token fetch error", e);
       fail("Dictation unavailable — retry");
       return;
     }
