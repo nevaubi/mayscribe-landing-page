@@ -135,15 +135,12 @@ export function DictationStrip({
           {elapsed}
         </span>
 
-        {/* Interim / error text — truncate from the left */}
+        {/* Interim / error text */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <div
-            className="text-[12px] italic text-right whitespace-nowrap overflow-hidden"
+            className="text-[12px] italic text-left whitespace-nowrap overflow-hidden text-ellipsis"
             style={{
               color: showError ? "#B42318" : "#7A8AAC",
-              direction: "rtl",
-              textOverflow: "ellipsis",
-              unicodeBidi: "plaintext",
             }}
             title={showError ? (errorMessage ?? "") : interim}
           >
