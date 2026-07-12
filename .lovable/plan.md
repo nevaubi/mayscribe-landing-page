@@ -1,54 +1,49 @@
 ## Goal
-Clicking either "Book a demo" button (nav + hero) opens a modal form. Submitting the form sends an email notification to `fshaher@mayscribe.com` with the submitted info, and shows a success state.
 
-## Form fields
-- Name (required)
-- Work email (required, validated)
-- Company (optional)
-- Role / title (optional)
-- Message (required, textarea)
+Make the MayScribe whitepaper openly accessible from the landing page — no gating. Ship both a CDN-hosted PDF (for download/print) and an on-site `/whitepaper` reader route (for SEO, deep-linking, and readability).
 
-Client-side validation with zod (trim, length caps, email format). Submit button shows loading state; on success shows a "Thanks, we'll be in touch" confirmation inside the modal; on failure shows an inline error.
+## Changes
 
-## UI
-- New `BookDemoDialog` component using existing shadcn `Dialog` primitives, styled to match the landing page tokens (Inter, `#061338` ink, `#0D57FA` accent, 8px radii, card shadow).
-- Lift open state into `Landing` via React context (or a small `useDemoDialog` hook) so both the `Nav` gradient button and the hero "Book a demo" button trigger the same dialog.
-- Accessible: focus trap (from Radix Dialog), Escape to close, labeled inputs, error text tied via `aria-describedby`.
+### 1. Host the PDF on the Lovable CDN
+Upload `MayScribe_Whitepaper.pdf` from the upload to CDN storage and write the pointer to `src/assets/mayscribe-whitepaper.pdf.asset.json`. No binary in the repo.
 
-## Backend (email delivery)
-This requires backend infrastructure, so as prerequisites we will:
-1. Enable **Lovable Cloud** (needed to send email).
-2. Set up a **Lovable email domain** on `mayscribe.com` (or a delegated subdomain like `notify.mayscribe.com`) — the user completes DNS via the in-app setup dialog. Emails cannot send until the domain is verified; auth-only fallback doesn't apply here since this is an app email.
-3. **Scaffold app email templates** (creates the registry + server send helper + preview route).
+### 2. New route: `/whitepaper`
+Create `src/routes/whitepaper.tsx` — a full readable HTML rendering of the paper for SEO and easy skimming.
 
-Then implement:
-- A React Email template `demo-request-notification.tsx` in `src/lib/email-templates/` — internal notification styled simply (name, email, company, role, message, timestamp). Subject: `New demo request from {name}`.
-- Register the template in `src/lib/email-templates/registry.ts`.
-- A **server function** `submitDemoRequest` in `src/lib/demo-request.functions.ts` using `createServerFn` with a zod `inputValidator`. Handler:
-  - Re-validates input server-side.
-  - Calls `sendTemplateEmail('demo-request-notification', 'fshaher@mayscribe.com', { templateData: {...}, replyTo: submitter email, idempotencyKey: hash of email+timestamp })`.
-  - Returns `{ ok: true }` or throws a typed error.
-- The dialog calls the server fn via `useServerFn` on submit.
+Layout:
+- Sticky top bar: back link to `/`, "Download PDF" button (links to the CDN URL), "Book a demo" button.
+- Header block: title "Clinical Dictation Without the Cloud", subtitle, "July 2026 · MayScribe · Prepared for hospital IT, compliance, and clinical informatics leadership".
+- Table of contents (anchored to `#section-1` … `#section-9`).
+- Body: sections 1–9 rendered as semantic HTML using the site's existing design tokens (Inter, `#061338` headings, `#46587E` body, blue kicker `#0D57FA`, hairline dividers `#E6EEF8`). Max content width ~720px, generous line-height for long-form reading.
+- References list at the bottom with numbered anchors (`[1]`–`[15]`), linking inline citations to the reference entries.
+- Footer reuses the site footer.
 
-No database table is created — this is purely a notification email. (If the user later wants a record of submissions, that can be added.)
+Route-level `head()`:
+- title: "Whitepaper — Clinical Dictation Without the Cloud | MayScribe"
+- description: A concise summary of the paper's argument (self-hosted dictation, zero audio retention, deterministic verification, honest SOC roadmap).
+- og:title, og:description, twitter:card mirrored.
+- canonical: `/whitepaper`.
+- JSON-LD `Article` schema (headline, datePublished 2026-07, author "MayScribe", about).
 
-## Files touched
-- `src/components/BookDemoDialog.tsx` (new)
-- `src/components/DemoDialogProvider.tsx` (new — context + hook)
-- `src/routes/__root.tsx` (mount provider)
-- `src/routes/index.tsx` (wire both "Book a demo" buttons to `openDemoDialog()`)
-- `src/lib/demo-request.functions.ts` (new server fn)
-- `src/lib/email-templates/demo-request-notification.tsx` (new template)
-- `src/lib/email-templates/registry.ts` (register template — created by scaffold step)
+### 3. Wire entry points on the landing page
+In `src/routes/index.tsx`:
+- **Dark CTA band**: replace the ghost "Request the whitepaper" button with a ghost "Read the whitepaper →" that links to `/whitepaper` (client `<Link>`, not `<a>`).
+- **Footer row 1**: add a "Whitepaper" link between "Compliance" and "Contact".
+- **Nav (desktop only)**: no change — keep the existing five items uncluttered. The whitepaper is reachable from the CTA band and footer.
 
-## Order of operations
-1. Enable Lovable Cloud.
-2. Prompt user to set up email domain for `mayscribe.com`.
-3. Scaffold app email templates.
-4. Add template + server fn + dialog + wiring.
-5. Verify by submitting the form once domain is verified.
+### 4. Sitemap
+Add `/whitepaper` as a `<url>` entry in `public/sitemap.xml` so it gets indexed.
 
-## Notes / confirmations needed
-- Recipient confirmed: `fshaher@mayscribe.com`.
-- Sender domain: I'll suggest `notify.mayscribe.com` during setup unless you prefer sending directly from `mayscribe.com`.
-- No CAPTCHA in v1; if spam becomes an issue we can add a honeypot field or Turnstile later.
+## Non-goals / explicit choices
+
+- No form gating. No "request the whitepaper" flow. The "Book a demo" modal remains the only lead-capture surface.
+- Not adding a whitepaper link to the top nav — keeps the nav focused on Product / Workflow / Security / Integrations.
+- Not embedding the PDF in an `<iframe>` — the HTML reader route is the primary reading experience; the PDF is a download for people who want to save, print, or share the file.
+- No changes to the "Book a demo" flow, email templates, or existing sections.
+
+## Technical notes
+
+- CDN upload uses `lovable-assets create --file /mnt/user-uploads/MayScribe_Whitepaper.pdf --filename mayscribe-whitepaper.pdf`; write output to `src/assets/mayscribe-whitepaper.pdf.asset.json`.
+- Import the pointer JSON in `whitepaper.tsx` and in `index.tsx` (for the PDF-download button that will also appear at the bottom of the reader page).
+- The reader page content is authored inline as JSX from the parsed whitepaper text — no runtime PDF parsing. If sections are updated later, edit the JSX and re-upload the PDF.
+- The route file is `src/routes/whitepaper.tsx` with `createFileRoute("/whitepaper")` — separate route, own `head()` per the SEO rules.

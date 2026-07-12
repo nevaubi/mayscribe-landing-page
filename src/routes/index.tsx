@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ShieldCheck, Server, Lock, ArrowRight, Pause, Square, Flag } from "lucide-react";
 import { BookDemoDialog } from "@/components/BookDemoDialog";
+
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -442,12 +443,13 @@ function CtaBand() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-          <button
-            className="text-white rounded-[8px] h-11 px-5 text-[14px] font-semibold w-full sm:w-auto"
+          <Link
+            to="/whitepaper"
+            className="text-white rounded-[8px] h-11 px-5 text-[14px] font-semibold w-full sm:w-auto inline-flex items-center justify-center gap-1.5"
             style={{ border: "1px solid var(--dark-border)", background: "transparent" }}
           >
-            Request the whitepaper
-          </button>
+            Read the whitepaper <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
     </section>
@@ -464,6 +466,7 @@ function Footer() {
             <a href="#">Product</a>
             <a href="#">Security</a>
             <a href="#">Compliance</a>
+            <Link to="/whitepaper">Whitepaper</Link>
             <a href="#">Contact</a>
           </div>
         </div>
