@@ -522,6 +522,10 @@ export function EmrDashboard() {
         e.preventDefault();
         toggleDictation();
       }
+      if (e.key === "F1") {
+        e.preventDefault();
+        setShowReview((prev) => !prev);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
