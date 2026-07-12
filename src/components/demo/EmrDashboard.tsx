@@ -531,6 +531,67 @@ export function EmrDashboard() {
           }
         })();
       }
+
+      // Async RxTerms fallback: strong-context tokens with no lexicon match.
+      for (const rc of pendingRxTermsMedChecks) {
+        void (async () => {
+          const ctrl = new AbortController();
+          const timer = window.setTimeout(() => ctrl.abort(), 400);
+          try {
+            const results = await searchRxTerms(rc.token, ctrl.signal);
+            if (!results.length) return; // not a medication
+            const lower = rc.token.toLowerCase();
+            const close = results.find((r) => {
+              const name = r.name.toLowerCase();
+              return name.startsWith(lower) || lower.startsWith(name.split(/\s+/)[0]);
+            });
+            if (!close) return;
+            const absStart = insertOffset + leadPrefix.length + rc.start;
+            const absEnd = insertOffset + leadPrefix.length + rc.end;
+            const already = anchorsRef.current.some(
+              (a) => a.section === section && a.start === absStart && a.end === absEnd,
+            );
+            if (already) return;
+            // Mark as a low-confidence med hold so the reviewer confirms it.
+            const sectionText = soapRef.current[section] ?? "";
+            if (absEnd > sectionText.length) return;
+            const placeholder = "_".repeat(Math.max(1, absEnd - absStart));
+            const nextText =
+              sectionText.slice(0, absStart) + placeholder + sectionText.slice(absEnd);
+            setSoap((prev) => ({ ...prev, [section]: nextText }));
+            prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+            const medName = close.name.split(/\s+/)[0];
+            const newSpan: Span = {
+              id: `rxt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              text: rc.token,
+              start: rc.start,
+              end: rc.end,
+              type: "med",
+              status: "hold",
+              candidates: [medName, "(dismiss)"],
+              reason: `Possible medication: ${medName}`,
+              minConfidence: 1,
+            };
+            setAnchors((prev) => [
+              ...prev,
+              {
+                id: newSpan.id,
+                section,
+                start: absStart,
+                end: absEnd,
+                span: newSpan,
+                rawText: rc.token,
+                state: "hold",
+              },
+            ]);
+            setVerifyStats((s) => ({ checked: s.checked, held: s.held + 1 }));
+          } catch {
+            // timeout / abort — no hold
+          } finally {
+            window.clearTimeout(timer);
+          }
+        })();
+      }
     },
     [],
   );
