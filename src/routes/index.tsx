@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ShieldCheck, Server, Lock, ArrowRight, Pause, Square, Flag } from "lucide-react";
 import { BookDemoDialog } from "@/components/BookDemoDialog";
-import whitepaperAsset from "@/assets/mayscribe-whitepaper.pdf.asset.json";
+
 
 export const Route = createFileRoute("/")({
   component: Landing,
