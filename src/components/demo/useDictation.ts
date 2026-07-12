@@ -166,15 +166,45 @@ export function useDictation(opts: UseDictationOptions = {}) {
     setAudioLevel(0);
   }, []);
 
+  const fireBatchTranscribe = useCallback(() => {
+    const cb = optsRef.current.onBatchTranscript;
+    const chunks = pcmBufferRef.current;
+    const total = pcmBufferSamplesRef.current;
+    pcmBufferRef.current = [];
+    pcmBufferSamplesRef.current = 0;
+    if (!cb || total < 16000) return; // <1s of audio — skip
+    const streamedText = finalLedgerRef.current;
+    void (async () => {
+      try {
+        const pcm = concatInt16(chunks);
+        const wav = pcmInt16ToWav(pcm, 16000);
+        const form = new FormData();
+        form.append("file", wav, "audio.wav");
+        const res = await fetch("/api/batch-transcribe", {
+          method: "POST",
+          body: form,
+        });
+        if (!res.ok) return;
+        const j = (await res.json()) as { text?: string };
+        if (typeof j.text === "string" && j.text.trim()) {
+          cb({ batchText: j.text, streamedText });
+        }
+      } catch {
+        // silent — batch is a best-effort cross-check
+      }
+    })();
+  }, []);
+
   const stop = useCallback(() => {
     sessionRef.current += 1;
     stoppingRef.current = true;
+    fireBatchTranscribe();
     cleanup();
     setErrorMessage(null);
     setExpired(false);
     setDictationStatus("idle");
     stoppingRef.current = false;
-  }, [cleanup, setDictationStatus]);
+  }, [cleanup, setDictationStatus, fireBatchTranscribe]);
 
   const fail = useCallback(
     (sessionId: number, msg: string, isExpired = false) => {
