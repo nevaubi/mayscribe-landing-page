@@ -148,16 +148,16 @@ function WhitepaperPage() {
 
       {/* Header block */}
       <section style={{ background: "var(--hero)" }}>
-        <div className="max-w-[900px] mx-auto px-6 lg:px-8 py-14 md:py-20">
+        <div className="max-w-[900px] mx-auto px-6 lg:px-8 py-10 md:py-14">
           <div className="text-[12px] font-bold tracking-[0.16em] text-[color:var(--brand)]">WHITEPAPER</div>
-          <h1 className="mt-3 text-[34px] md:text-[46px] font-bold leading-[1.1] tracking-[-0.02em] text-[color:var(--ink)]">
+          <h1 className="mt-2 text-[32px] md:text-[42px] font-bold leading-[1.1] tracking-[-0.02em] text-[color:var(--ink)] max-w-[760px]">
             Clinical Dictation Without the Cloud
           </h1>
-          <p className="mt-5 text-[16.5px] md:text-[18px] leading-[1.55] text-[color:var(--ink-2)] max-w-[720px]">
+          <p className="mt-4 text-[16px] md:text-[17px] leading-[1.55] text-[color:var(--ink-2)] max-w-[640px]">
             Security, compliance, and real-time performance in hospital speech recognition, and why the safest place to
             run it is inside your own network.
           </p>
-          <div className="mt-6 text-[13px] font-medium text-[color:var(--muted-ink)]">
+          <div className="mt-4 text-[13px] font-medium text-[color:var(--muted-ink)]">
             July 2026 · MayScribe · Prepared for hospital IT, compliance, and clinical informatics leadership
           </div>
         </div>
