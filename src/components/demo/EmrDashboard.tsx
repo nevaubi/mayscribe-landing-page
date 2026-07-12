@@ -381,6 +381,7 @@ export function EmrDashboard() {
         end: insertOffset + leadPrefix.length + committedText.length,
       });
       setLastCommitAt(new Date());
+      setFormatUndo(null);
       window.setTimeout(() => setFlashRange(null), 600);
 
       // Restore caret
@@ -778,6 +779,7 @@ export function EmrDashboard() {
     (section: SoapSection, newValue: string) => {
       const prev = prevSoapRef.current[section] ?? "";
       if (prev === newValue) return;
+      setFormatUndo((u) => (u && u.section === section ? null : u));
       // Find common prefix
       let p = 0;
       const minLen = Math.min(prev.length, newValue.length);
