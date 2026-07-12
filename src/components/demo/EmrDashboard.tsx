@@ -138,7 +138,7 @@ function VitalTrend({ trend }: { trend: string }) {
   return <span className="text-muted-foreground text-xs font-mono">→</span>;
 }
 
-export default function App() {
+export function EmrDashboard() {
   const [activePatient, setActivePatient] = useState(PATIENTS[0]);
   const [activeTab, setActiveTab] = useState("notes");
   const [soap, setSoap] = useState(SOAP_DEFAULTS);
@@ -153,7 +153,7 @@ export default function App() {
   );
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-background" style={{ fontFamily: "'Figtree', sans-serif" }}>
+    <div className="h-[calc(100vh-2.5rem)] w-full flex flex-col overflow-hidden bg-background" style={{ fontFamily: "'Figtree', sans-serif" }}>
 
       {/* ── TOP NAV ─────────────────────────────────────────────────── */}
       <header className="h-12 bg-[#12294D] flex items-center px-3 gap-3 flex-shrink-0 z-50 border-b border-[rgba(255,255,255,0.08)]">
