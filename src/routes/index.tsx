@@ -51,7 +51,7 @@ function GradientButton({ children, className = "" }: { children: React.ReactNod
 function Nav() {
   return (
     <header className="w-full">
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 h-[72px] flex items-center justify-between">
+      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 h-[60px] md:h-[72px] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <Logo size={34} />
           <span className="text-[22px] font-bold text-[color:var(--ink)] tracking-tight">MayScribe</span>
