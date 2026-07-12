@@ -401,6 +401,14 @@ export const MEDS: MedEntry[] = [
   { name: "Anastrozole", aliases: ["arimidex"], typicalDoseRange: { min: 1, max: 1, unit: "mg" }, routes: ["PO"], freqs: ["daily"] },
 ];
 
+// Strip typicalDoseRange from entries outside the curated core. Async RxTerms
+// lookup in verify.ts handles dose validation for those meds.
+for (const m of MEDS) {
+  if (!CORE_RANGE_NAMES.has(m.name)) {
+    delete (m as { typicalDoseRange?: unknown }).typicalDoseRange;
+  }
+}
+
 // Look-alike / sound-alike pairs (bidirectional)
 export const LASA: [string, string][] = [
   ["hydroxyzine", "hydralazine"],
