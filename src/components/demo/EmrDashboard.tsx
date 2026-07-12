@@ -216,6 +216,7 @@ export function EmrDashboard() {
   const [interim, setInterim] = useState("");
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [lastCommitAt, setLastCommitAt] = useState<Date | null>(null);
+  const [lastCommitText, setLastCommitText] = useState<string | null>(null);
 
   // Verification anchors — track holds and dismissed spans per section
   interface Anchor {
@@ -323,6 +324,10 @@ export function EmrDashboard() {
 
       const formatted = formatDictationInsert(text, before);
       if (!formatted) return;
+      setLastCommitText(formatted);
+      window.setTimeout(() => {
+        setLastCommitText((current) => (current === formatted ? null : current));
+      }, 900);
 
       const { spans, committedText } = verify(formatted, words);
       const insert = leadPrefix + committedText;
@@ -479,9 +484,21 @@ export function EmrDashboard() {
       }
     },
     onError: () => setInterim(""),
+    onQuietStop: () => {
+      setStartedAt(null);
+      setInterim("");
+    },
   });
 
-  const { status, start, stop, audioLevel, expired, errorMessage } = dictation;
+  const {
+    status,
+    start,
+    stop,
+    audioLevel,
+    quietMsRemaining,
+    expired,
+    errorMessage,
+  } = dictation;
 
   const toggleDictation = useCallback(() => {
     if (status === "listening" || status === "connecting") {
@@ -663,7 +680,25 @@ export function EmrDashboard() {
   );
 
   return (
-    <div className="h-[calc(100vh-2.5rem)] w-full flex flex-col overflow-hidden bg-background" style={{ fontFamily: "'Figtree', sans-serif" }}>
+    <>
+      <DictationStrip
+        status={status}
+        audioLevel={audioLevel}
+        interim={interim}
+        startedAt={startedAt}
+        quietMsRemaining={quietMsRemaining}
+        errorMessage={errorMessage}
+        expired={expired}
+        section={dictationTargetRef.current}
+        lastCommit={lastCommitText}
+        onStop={() => {
+          stop();
+          setStartedAt(null);
+          setInterim("");
+        }}
+      />
+      <QuickLookup ref={quickLookupRef} />
+      <div className="h-[calc(100vh-2.5rem)] w-full flex flex-col overflow-hidden bg-background" style={{ fontFamily: "'Figtree', sans-serif" }}>
 
       {/* ── TOP NAV ─────────────────────────────────────────────────── */}
       <header className="h-12 bg-[#12294D] flex items-center px-3 gap-3 flex-shrink-0 z-50 border-b border-[rgba(255,255,255,0.08)]">
@@ -926,21 +961,6 @@ export function EmrDashboard() {
                         );
                       })}
 
-                      <DictationStrip
-                        status={status}
-                        audioLevel={audioLevel}
-                        interim={interim}
-                        startedAt={startedAt}
-                        errorMessage={errorMessage}
-                        expired={expired}
-                        section={dictationTargetRef.current}
-                        lastCommit={null}
-                        onStop={() => {
-                          stop();
-                          setStartedAt(null);
-                          setInterim("");
-                        }}
-                      />
                     </div>
 
                     {/* Review Tray */}
@@ -989,9 +1009,6 @@ export function EmrDashboard() {
 
                 {/* ── RIGHT PANEL ──────────────────────────────────── */}
                 <aside className="w-64 border-l border-border bg-card flex-shrink-0 overflow-y-auto scrollbar-hide">
-
-                  {/* Quick Lookup */}
-                  <QuickLookup ref={quickLookupRef} />
 
                   {/* Vitals */}
                   <div className="border-b border-border">
@@ -1273,6 +1290,7 @@ export function EmrDashboard() {
         <span className="flex items-center gap-1 text-[10px] text-emerald-500 font-mono"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /> Connected · HL7 FHIR R4</span>
         <div className="ml-auto text-[10px] text-[#4A7096] font-mono">07/12/2026 · 09:41 AM</div>
       </footer>
-    </div>
+      </div>
+    </>
   );
 }
