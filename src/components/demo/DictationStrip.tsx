@@ -234,6 +234,43 @@ export function DictationStrip({
             </div>
           </div>
 
+          {/* F1 · Review hint chip with hold count badge and amber pulse. */}
+          <div
+            key={pulseKey}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded-full flex-shrink-0"
+            style={{
+              background: "#F3F6FB",
+              color: "#46587E",
+              fontSize: 10,
+              fontWeight: 600,
+              animation:
+                holdCount > 0 && reviewTrayClosed
+                  ? "dictation-hold-pulse 1.6s ease-out 2"
+                  : undefined,
+            }}
+            title="Press F1 to open the review panel"
+          >
+            <span style={{ letterSpacing: 0.3 }}>F1 · Review</span>
+            {holdCount > 0 && (
+              <span
+                className="inline-flex items-center justify-center rounded-full"
+                style={{
+                  background: "#0D57FA",
+                  color: "white",
+                  minWidth: 14,
+                  height: 14,
+                  padding: "0 4px",
+                  fontSize: 9,
+                  fontWeight: 700,
+                }}
+              >
+                {holdCount}
+              </span>
+            )}
+            <style>{`@keyframes dictation-hold-pulse { 0%{box-shadow:0 0 0 0 rgba(242,168,58,0.55)} 100%{box-shadow:0 0 0 10px rgba(242,168,58,0)} }`}</style>
+          </div>
+
+
           <button
             onClick={onStop}
             className="h-7 w-7 rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors flex-shrink-0"
