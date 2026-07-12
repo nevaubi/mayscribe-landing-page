@@ -466,6 +466,65 @@ export function EmrDashboard() {
         .catch(() => {
           // 2s timeout or bad JSON — silent, deterministic result unchanged
         });
+
+      // Async RxTerms STRENGTHS_AND_FORMS dose checks (add-only, 400ms budget).
+      for (const pc of pendingRangeChecks) {
+        void (async () => {
+          const ctrl = new AbortController();
+          const timer = window.setTimeout(() => ctrl.abort(), 400);
+          try {
+            const strengths = await getStrengthsAndForms(pc.medName, ctrl.signal);
+            if (!strengths.length) return;
+            const { ok, nearest } = checkDoseAgainstStrengths(
+              pc.dose,
+              pc.unit,
+              strengths,
+            );
+            if (ok || !nearest.length) return;
+            const absStart = insertOffset + leadPrefix.length + pc.doseStart;
+            const absEnd = insertOffset + leadPrefix.length + pc.doseEnd;
+            const already = anchorsRef.current.some(
+              (a) => a.section === section && a.start === absStart && a.end === absEnd,
+            );
+            if (already) return;
+            const sectionText = soapRef.current[section] ?? "";
+            if (absEnd > sectionText.length) return;
+            const placeholder = "_".repeat(Math.max(1, absEnd - absStart));
+            const nextText =
+              sectionText.slice(0, absStart) + placeholder + sectionText.slice(absEnd);
+            setSoap((prev) => ({ ...prev, [section]: nextText }));
+            prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+            const newSpan: Span = {
+              id: `rx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              text: pc.doseText,
+              start: pc.doseStart,
+              end: pc.doseEnd,
+              type: "dose",
+              status: "hold",
+              candidates: nearest.map((s) => `${s.value} ${s.unit}`),
+              reason: `Available strengths: ${nearest.map((s) => `${s.value} ${s.unit}`).join(", ")}`,
+              minConfidence: 1,
+            };
+            setAnchors((prev) => [
+              ...prev,
+              {
+                id: newSpan.id,
+                section,
+                start: absStart,
+                end: absEnd,
+                span: newSpan,
+                rawText: pc.doseText,
+                state: "hold",
+              },
+            ]);
+            setVerifyStats((s) => ({ checked: s.checked, held: s.held + 1 }));
+          } catch {
+            // timeout or fetch failure — fall back to deterministic result
+          } finally {
+            window.clearTimeout(timer);
+          }
+        })();
+      }
     },
     [],
   );
