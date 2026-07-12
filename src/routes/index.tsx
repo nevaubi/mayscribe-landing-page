@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { ShieldCheck, Server, Lock, ArrowRight, Pause, Square, Flag } from "lucide-react";
+import { BookDemoDialog } from "@/components/BookDemoDialog";
 
 export const Route = createFileRoute("/")({
   component: Landing,
