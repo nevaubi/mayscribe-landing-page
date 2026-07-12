@@ -389,13 +389,16 @@ export function useDictation(opts: UseDictationOptions = {}) {
 
       if (useWorklet && workletNodeRef.current) {
         workletNodeRef.current.port.onmessage = (ev: MessageEvent) => {
-          if (
-            sessionId !== sessionRef.current ||
-            socket.readyState !== WebSocket.OPEN
-          )
-            return;
+          if (sessionId !== sessionRef.current) return;
           const buf = ev.data as ArrayBuffer;
-          if (buf && buf.byteLength) socket.send(buf);
+          if (!buf || !buf.byteLength) return;
+          // Stash a copy for batch cross-check (bounded).
+          if (pcmBufferSamplesRef.current < PCM_BUFFER_CAP_SAMPLES) {
+            const frame = new Int16Array(buf.slice(0));
+            pcmBufferRef.current.push(frame);
+            pcmBufferSamplesRef.current += frame.length;
+          }
+          if (socket.readyState === WebSocket.OPEN) socket.send(buf);
         };
         return;
       }
