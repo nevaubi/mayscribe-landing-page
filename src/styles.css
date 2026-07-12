@@ -121,3 +121,16 @@
   animation: wave-pulse 1.1s ease-in-out infinite;
   transform-origin: center;
 }
+
+@utility scrollbar-hide {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
