@@ -4,6 +4,7 @@ import type { Span } from "./verify";
 import {
   applyFormatToggles,
   applyDeterministicFormat,
+  deterministicClean,
   toAppliedPlainText,
   FORMAT_TOGGLES,
   type FormatToggle,
