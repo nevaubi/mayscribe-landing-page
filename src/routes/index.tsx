@@ -339,12 +339,6 @@ function Compliance() {
         "Administrative, technical, and physical safeguards mapped to the Security Rule. Business associate agreements executed with your organization and AWS.",
     },
     {
-      stage: "IN PROGRESS",
-      title: "SOC 2 Type I",
-      body:
-        "Controls are designed, documented, and operating. An independent Type I attestation is targeted within the first year of deployment.",
-    },
-    {
       stage: "PLANNED",
       title: "SOC 1 and SOC 2 Type II",
       body:
