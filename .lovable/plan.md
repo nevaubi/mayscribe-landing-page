@@ -1,42 +1,33 @@
-# Mobile refinements to the MayScribe landing page
+# Scale down the hero visual stack by ~25% on desktop
 
-Scope: mobile only (below the `md` breakpoint, ~768px). Desktop layout stays exactly as it is now.
+## Goal
+On larger screens, reduce the visual weight of the three hero UI cards (EHR Workspace card, Floating Dictation panel, Suggested Medications panel) by roughly 25% while preserving their exact proportions, spacing, and typography scale. Mobile remains unchanged (panels are already hidden on mobile).
 
-## 1. Hero — hide the visual stack on mobile
-In `src/routes/index.tsx`, inside the `Hero` right column:
-- Hide the `WorkspaceCard` on mobile, show from `md` up.
-- Remove the mobile-only stacked block that renders `FloatingDictation` and `SuggestedMeds` under the workspace card.
-- Keep the desktop absolute-positioned overlays untouched.
+## What we will do
 
-Result on mobile: hero shows only the eyebrow-free headline, subcopy, two CTAs, and the three trust phrases. No card, no waveform panel, no meds panel.
+### 1. Wrap the desktop hero visual stack in a scaled container
+- In `src/routes/index.tsx`, keep the existing `WorkspaceCard`, `FloatingDictation`, and `SuggestedMeds` components unchanged.
+- Wrap the entire desktop-only visual block inside the right column in a new container that applies `transform: scale(0.75)`.
+- Use `transform-origin: center top` so the composition scales down from its top center, keeping the overlay cards aligned with the workspace card.
+- Center the scaled block horizontally within the right column with `flex justify-center`.
 
-Also tighten the hero on mobile:
-- Reduce top/bottom padding (`pt-8 pb-24` → `pt-4 pb-14` on mobile, keep desktop values via `lg:`).
-- Slightly smaller H1 on mobile (44px → 38px) and tighter line-height.
-- CTA buttons: full-width side-by-side row on mobile with `h-11` instead of `h-12`.
-- Trust row: tighter gap and slightly smaller text on mobile.
+### 2. Tighten the surrounding layout
+- Because CSS `transform: scale` does not reduce the element’s layout footprint, the right column would still reserve the original vertical space.
+- Add a negative bottom margin or explicit height wrapper to reclaim the extra whitespace and keep the hero section compact.
+- Verify the overlap positions of the floating dictation and medications panels still read correctly after scaling.
 
-## 2. Compliance — drop the middle card
-Remove the "IN PROGRESS · SOC 2 Type I" card from the `cards` array in `Compliance`. Only "NOW · HIPAA-aligned, BAA-ready" and "PLANNED · SOC 1 and SOC 2 Type II" remain.
+### 3. Keep proportions and avoid manual re-sizing
+- Do not manually shrink individual widths, paddings, or font sizes inside the cards.
+- Scaling the whole stack guarantees that borders, shadows, rounded corners, waveform bars, and text all shrink proportionally.
 
-Grid becomes 2 columns from `md` up, single column on mobile. On desktop the two cards center under the heading with a comfortable max width so they don't stretch full-bleed.
+## Scope and exclusions
+- Only affects the desktop hero visual stack (the right-hand column of the hero section).
+- Mobile layout stays exactly as is: workspace/dictation/meds panels remain hidden below `md`.
+- No changes to copy, colors, tokens, section order, or other sections.
 
-Also update the footer strapline so it no longer implies an in-progress SOC 2 Type I:
-- From: `HIPAA-aligned · BAA-ready · SOC 2 Type I in progress`
-- To:   `HIPAA-aligned · BAA-ready · SOC attestations on roadmap`
+## Files touched
+- `src/routes/index.tsx` — add a scaled wrapper around the existing desktop hero visual block.
 
-(Compliance section body copy stays; it already reads cleanly without the middle card.)
-
-## 3. Global mobile polish
-Small, section-wide tightening to feel more enterprise/compact on phones — desktop unchanged:
-- Section vertical padding on mobile: `py-[76px]` → `py-12` (keep 76px from `md` up) for Compliance, Security, and the CTA band.
-- Section heading size on mobile: 32px → 26px, tighter tracking.
-- Card interior padding on mobile: `p-6` → `p-5` for Compliance/Security cards.
-- Nav: reduce header height on mobile from 72px to 60px, keep the gradient "Book a demo" button, hide "Sign in" on mobile (already hidden at `sm`, keep as is).
-- CTA band on mobile: stack heading/body and buttons with `gap-5`, buttons become full-width; desktop row layout preserved.
-- Footer on mobile: link row wraps to two lines cleanly with `gap-x-5 gap-y-2`.
-
-## 4. Files touched
-- `src/routes/index.tsx` — all of the above; no new components, no new dependencies.
-
-Nothing else changes: tokens, colors, copy elsewhere, desktop composition, and section order stay identical.
+## Verification
+- Check the desktop preview at 1440px: the three cards should appear ~25% smaller but otherwise identical in composition.
+- Check the mobile preview: no visual cards appear, and no regressions in hero text or CTAs.
