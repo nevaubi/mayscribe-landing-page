@@ -861,27 +861,6 @@ export function EmrDashboard() {
                             <option>Discharge Summary</option>
                             <option>Consult Note</option>
                           </select>
-                          <button
-                            type="button"
-                            onClick={toggleDictation}
-                            aria-pressed={status === "listening"}
-                            title={status === "listening" ? "Stop dictation (F2)" : "Start dictation (F2)"}
-                            className={`h-6 w-6 rounded flex items-center justify-center border transition-colors ${
-                              status === "listening"
-                                ? "bg-[#0D57FA] border-[#0D57FA] text-white"
-                                : status === "connecting"
-                                  ? "bg-amber-50 border-amber-200 text-amber-700 animate-pulse"
-                                  : status === "error"
-                                    ? "bg-red-50 border-red-200 text-red-600"
-                                    : "bg-white border-border text-[#46587E] hover:bg-slate-50"
-                            }`}
-                          >
-                            {status === "error" && errorMessage?.startsWith("Microphone") ? (
-                              <MicOff className="w-3.5 h-3.5" />
-                            ) : (
-                              <Mic className="w-3.5 h-3.5" />
-                            )}
-                          </button>
                           {status === "error" && errorMessage?.startsWith("Microphone") && (
                             <span className="text-[10px] text-red-600 font-medium">
                               Microphone blocked — enable it in the browser bar
