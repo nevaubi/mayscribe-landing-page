@@ -460,7 +460,7 @@ function CtaBand() {
             className="text-white rounded-[8px] h-11 px-5 text-[14px] font-semibold w-full sm:w-auto inline-flex items-center justify-center gap-1.5"
             style={{ border: "1px solid var(--dark-border)", background: "transparent" }}
           >
-            Read the whitepaper <ArrowRight className="h-4 w-4" />
+            Whitepaper preview <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </div>
