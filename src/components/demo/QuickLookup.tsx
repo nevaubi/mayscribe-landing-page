@@ -67,10 +67,10 @@ function fuzzyFallbackMeds(q: string): MedResult[] {
       else best = Math.min(best, levenshtein(n, w, 2));
     }
     if (best <= 2) {
-      const strengths = [
-        `${m.typicalDoseRange.min} ${m.typicalDoseRange.unit}`,
-        `${m.typicalDoseRange.max} ${m.typicalDoseRange.unit}`,
-      ];
+      const r = m.typicalDoseRange;
+      const strengths = r
+        ? [`${r.min} ${r.unit}`, `${r.max} ${r.unit}`]
+        : [];
       scored.push({ r: { name: m.name, strengths }, s: best });
     }
   }
