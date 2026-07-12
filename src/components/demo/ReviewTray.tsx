@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Span } from "./verify";
 import {
@@ -6,6 +6,10 @@ import {
   FORMAT_TOGGLES,
   type FormatToggle,
 } from "./format-options";
+
+const PANEL_WIDTH = 380;
+const EDGE_MARGIN = 24;
+const MIN_VISIBLE = 40;
 
 export interface HoldEntry {
   anchorId: string;
@@ -113,8 +117,39 @@ export function ReviewTray({
 }: Props) {
   const [portalReady, setPortalReady] = useState(false);
   const [toggles, setToggles] = useState<Set<FormatToggle>>(new Set());
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
 
-  useEffect(() => setPortalReady(typeof document !== "undefined"), []);
+  useEffect(() => {
+    setPortalReady(typeof document !== "undefined");
+    if (typeof window !== "undefined" && pos === null) {
+      setPos({
+        x: Math.max(EDGE_MARGIN, window.innerWidth - PANEL_WIDTH - EDGE_MARGIN),
+        y: 96,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
+    const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    dragRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const { dx, dy } = dragRef.current;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const nx = Math.min(w - MIN_VISIBLE, Math.max(MIN_VISIBLE - PANEL_WIDTH, e.clientX - dx));
+    const ny = Math.min(h - MIN_VISIBLE, Math.max(0, e.clientY - dy));
+    setPos({ x: nx, y: ny });
+  };
+  const onHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+  };
 
   const displayText = useMemo(
     () => (toggles.size === 0 ? sectionText : applyFormatToggles(sectionText, toggles)),
@@ -137,8 +172,12 @@ export function ReviewTray({
 
   const node = (
     <div
-      className="fixed right-6 top-24 w-[380px] overflow-hidden rounded-xl border bg-white/95 pointer-events-auto flex flex-col"
+      className="fixed overflow-hidden rounded-xl border bg-white/95 pointer-events-auto flex flex-col"
       style={{
+        left: pos?.x ?? 0,
+        top: pos?.y ?? 96,
+        width: PANEL_WIDTH,
+        visibility: pos ? "visible" : "hidden",
         zIndex: 9997,
         maxHeight: "calc(100vh - 8rem)",
         fontFamily: "'Inter', sans-serif",
@@ -149,8 +188,15 @@ export function ReviewTray({
           "0 24px 64px -24px rgba(5,18,56,0.28), 0 8px 20px -12px rgba(5,18,56,0.18)",
       }}
     >
-      {/* Header */}
-      <div className="px-4 py-2 border-b border-border flex items-center justify-between flex-shrink-0">
+      {/* Header (drag handle) */}
+      <div
+        onPointerDown={onHeaderPointerDown}
+        onPointerMove={onHeaderPointerMove}
+        onPointerUp={onHeaderPointerUp}
+        onPointerCancel={onHeaderPointerUp}
+        className="px-4 py-2 border-b border-border flex items-center justify-between flex-shrink-0 select-none"
+        style={{ cursor: dragRef.current ? "grabbing" : "grab", touchAction: "none" }}
+      >
         <div className="flex items-center gap-2">
           <div className="text-[11px] font-semibold uppercase tracking-widest text-[#0D57FA]">
             Review
@@ -166,6 +212,9 @@ export function ReviewTray({
             </span>
           )}
         </div>
+        <span className="text-[9px] text-muted-foreground uppercase tracking-wider" data-no-drag={false}>
+          drag
+        </span>
       </div>
 
       {/* Formatting toggles */}
