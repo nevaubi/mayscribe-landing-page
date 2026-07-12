@@ -1068,6 +1068,9 @@ export function EmrDashboard() {
                 {/* ── RIGHT PANEL ──────────────────────────────────── */}
                 <aside className="w-64 border-l border-border bg-card flex-shrink-0 overflow-y-auto scrollbar-hide">
 
+                  {/* Quick Lookup */}
+                  <QuickLookup ref={quickLookupRef} />
+
                   {/* Vitals */}
                   <div className="border-b border-border">
                     <div className="px-3 py-2.5 flex items-center justify-between">
