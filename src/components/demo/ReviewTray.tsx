@@ -214,7 +214,17 @@ export function ReviewTray({
 }: Props) {
   const [portalReady, setPortalReady] = useState(false);
   const [tab, setTab] = useState<"items" | "format">("items");
-  const [toggles, setToggles] = useState<Set<FormatToggle>>(new Set());
+  const [toggles, setToggles] = useState<Set<FormatToggle>>(
+    () =>
+      new Set<FormatToggle>([
+        "punctuation",
+        "sentenceCase",
+        "unitsAndAbbrev",
+        "abbrevPlus",
+        "spelling",
+        "structure",
+      ]),
+  );
   const [preview, setPreview] = useState<{ before: string; after: string } | null>(
     null,
   );
