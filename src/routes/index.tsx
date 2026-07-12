@@ -313,19 +313,14 @@ function Hero() {
             </div>
           </div>
 
-          <div className="lg:col-span-7 relative">
+          <div className="hidden md:block lg:col-span-7 relative">
             <WorkspaceCard />
             {/* Floating dictation - overlaps left edge */}
-            <div className="hidden md:block absolute -left-6 top-32 z-10">
+            <div className="absolute -left-6 top-32 z-10">
               <FloatingDictation />
             </div>
             {/* Suggested meds - overlaps bottom right */}
-            <div className="hidden md:block absolute -right-4 bottom-20 z-10">
-              <SuggestedMeds />
-            </div>
-            {/* Mobile stacked */}
-            <div className="mt-6 grid gap-6 md:hidden">
-              <FloatingDictation />
+            <div className="absolute -right-4 bottom-20 z-10">
               <SuggestedMeds />
             </div>
           </div>
