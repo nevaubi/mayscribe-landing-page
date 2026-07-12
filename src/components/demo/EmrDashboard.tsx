@@ -135,20 +135,62 @@ const SOAP_DEFAULTS: Record<SoapSection, string> = {
   plan: "",
 };
 
-function prepareDictationInsert(rawText: string, before: string, after: string) {
-  const text = rawText.replace(/\s+/g, " ").trim();
-  if (!text) return "";
+// Deepgram dictation-mode -> clean, EMR-ready text.
+// Preserves \n (spoken "new line" / "new paragraph") and normalizes clinical tokens.
+function normalizeMedicalTokens(text: string): string {
+  let t = text;
+  const rules: [RegExp, string][] = [
+    [/\bq\.?h\.?s\.?\b/gi, "QHS"],
+    [/\bb\.?i\.?d\.?\b/gi, "BID"],
+    [/\bt\.?i\.?d\.?\b/gi, "TID"],
+    [/\bq\.?i\.?d\.?\b/gi, "QID"],
+    [/\bprn\b/gi, "PRN"],
+    [/\bpo\b/gi, "PO"],
+    [/\biv\b/gi, "IV"],
+  ];
+  for (const [re, r] of rules) t = t.replace(re, r);
+  const unitMap: Record<string, string> = {
+    milligram: "mg", milligrams: "mg", mg: "mg",
+    microgram: "mcg", micrograms: "mcg", mcg: "mcg",
+    gram: "g", grams: "g", g: "g",
+    milliliter: "mL", milliliters: "mL", ml: "mL",
+    unit: "units", units: "units",
+  };
+  t = t.replace(
+    /(\d+(?:\.\d+)?)\s*(milligrams?|mg|micrograms?|mcg|grams?|g|milliliters?|ml|units?)\b/gi,
+    (_m, n, u) => `${n} ${unitMap[u.toLowerCase()] ?? u}`,
+  );
+  return t;
+}
 
-  const startsWithPunctuation = /^[,.;:!?)]/.test(text);
+function formatDictationInsert(rawText: string, before: string): string {
+  // 1. Collapse only spaces/tabs; preserve \n.
+  let text = rawText.replace(/[ \t]+/g, " ");
+  // 2. Trim leading/trailing spaces/tabs (not newlines).
+  text = text.replace(/^[ \t]+|[ \t]+$/g, "");
+  if (!text) return "";
+  // 3. Spacing normalization.
+  text = text.replace(/\s+([.,;:!?])/g, "$1");
+  text = text.replace(/([.,;:!?])([A-Za-z0-9])/g, "$1 $2");
+  // 4. Medical token normalization.
+  text = normalizeMedicalTokens(text);
+  // 5. Sentence casing.
+  const shouldCap =
+    before.length === 0 ||
+    /\n\s*$/.test(before) ||
+    /[.!?]\s*$/.test(before);
+  if (shouldCap) {
+    text = text.replace(/([a-z])/, (_c, ch: string) => ch.toUpperCase());
+  }
+  // 6. Leading space if joining onto existing text.
+  const startsWithPunct = /^[,.;:!?)]/.test(text);
   const endsWithOpening = /[(\[{\s]$/.test(before);
   const needsLeadingSpace =
     before.length > 0 &&
     !/\s$/.test(before) &&
-    !startsWithPunctuation &&
+    !startsWithPunct &&
     !endsWithOpening;
-  const needsTrailingSpace = after.length > 0 && !/^\s|^[,.;:!?)]/.test(after);
-
-  return `${needsLeadingSpace ? " " : ""}${text}${needsTrailingSpace ? " " : ""}`;
+  return (needsLeadingSpace ? " " : "") + text;
 }
 
 function StatusDot({ flag }: { flag: string | null }) {
