@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { ShieldCheck, Server, Lock, ArrowRight, Pause, Square, Flag } from "lucide-react";
+import { BookDemoDialog } from "@/components/BookDemoDialog";
 
 export const Route = createFileRoute("/")({
   component: Landing,
@@ -38,9 +40,10 @@ function NavLink({ children }: { children: React.ReactNode }) {
   );
 }
 
-function GradientButton({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function GradientButton({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
   return (
     <button
+      onClick={onClick}
       className={`bg-gradient-brand text-white shadow-btn rounded-[8px] px-4 h-10 text-[14px] font-semibold inline-flex items-center gap-1.5 ${className}`}
     >
       {children}
@@ -48,7 +51,7 @@ function GradientButton({ children, className = "" }: { children: React.ReactNod
   );
 }
 
-function Nav() {
+function Nav({ onBookDemo }: { onBookDemo: () => void }) {
   return (
     <header className="w-full">
       <div className="max-w-[1280px] mx-auto px-6 lg:px-10 h-[60px] md:h-[72px] flex items-center justify-between">
@@ -63,7 +66,7 @@ function Nav() {
           <NavLink>Integrations</NavLink>
         </nav>
         <div className="flex items-center gap-5">
-          <GradientButton>
+          <GradientButton onClick={onBookDemo}>
             Book a demo <ArrowRight className="h-4 w-4" />
           </GradientButton>
         </div>
@@ -267,7 +270,7 @@ function SuggestedMeds() {
   );
 }
 
-function Hero() {
+function Hero({ onBookDemo }: { onBookDemo: () => void }) {
   return (
     <section className="relative overflow-hidden" style={{ background: "var(--hero)" }}>
       <div
@@ -277,7 +280,7 @@ function Hero() {
           background: "radial-gradient(closest-side, rgba(15,209,214,0.35), rgba(11,93,255,0.10) 55%, transparent 75%)",
         }}
       />
-      <Nav />
+      <Nav onBookDemo={onBookDemo} />
       <div className="max-w-[1280px] mx-auto px-6 lg:px-10 pb-14 pt-4 lg:pb-24 lg:pt-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-5">
@@ -294,6 +297,7 @@ function Hero() {
             </p>
             <div className="mt-7 lg:mt-8 flex flex-wrap gap-3">
               <button
+                onClick={onBookDemo}
                 className="bg-white rounded-[8px] h-11 lg:h-12 px-5 text-[14.5px] lg:text-[15px] font-semibold text-[color:var(--ink)] inline-flex items-center gap-2 flex-1 sm:flex-none justify-center"
                 style={{ border: "1px solid var(--border-strong)" }}
               >
@@ -473,13 +477,16 @@ function Footer() {
 }
 
 function Landing() {
+  const [demoOpen, setDemoOpen] = useState(false);
+  const openDemo = () => setDemoOpen(true);
   return (
     <main className="min-h-screen bg-white">
-      <Hero />
+      <Hero onBookDemo={openDemo} />
       <Compliance />
       <Security />
       <CtaBand />
       <Footer />
+      <BookDemoDialog open={demoOpen} onOpenChange={setDemoOpen} />
     </main>
   );
 }

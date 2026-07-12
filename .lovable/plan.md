@@ -1,33 +1,54 @@
-# Scale down the hero visual stack by ~25% on desktop
-
 ## Goal
-On larger screens, reduce the visual weight of the three hero UI cards (EHR Workspace card, Floating Dictation panel, Suggested Medications panel) by roughly 25% while preserving their exact proportions, spacing, and typography scale. Mobile remains unchanged (panels are already hidden on mobile).
+Clicking either "Book a demo" button (nav + hero) opens a modal form. Submitting the form sends an email notification to `fshaher@mayscribe.com` with the submitted info, and shows a success state.
 
-## What we will do
+## Form fields
+- Name (required)
+- Work email (required, validated)
+- Company (optional)
+- Role / title (optional)
+- Message (required, textarea)
 
-### 1. Wrap the desktop hero visual stack in a scaled container
-- In `src/routes/index.tsx`, keep the existing `WorkspaceCard`, `FloatingDictation`, and `SuggestedMeds` components unchanged.
-- Wrap the entire desktop-only visual block inside the right column in a new container that applies `transform: scale(0.75)`.
-- Use `transform-origin: center top` so the composition scales down from its top center, keeping the overlay cards aligned with the workspace card.
-- Center the scaled block horizontally within the right column with `flex justify-center`.
+Client-side validation with zod (trim, length caps, email format). Submit button shows loading state; on success shows a "Thanks, we'll be in touch" confirmation inside the modal; on failure shows an inline error.
 
-### 2. Tighten the surrounding layout
-- Because CSS `transform: scale` does not reduce the element’s layout footprint, the right column would still reserve the original vertical space.
-- Add a negative bottom margin or explicit height wrapper to reclaim the extra whitespace and keep the hero section compact.
-- Verify the overlap positions of the floating dictation and medications panels still read correctly after scaling.
+## UI
+- New `BookDemoDialog` component using existing shadcn `Dialog` primitives, styled to match the landing page tokens (Inter, `#061338` ink, `#0D57FA` accent, 8px radii, card shadow).
+- Lift open state into `Landing` via React context (or a small `useDemoDialog` hook) so both the `Nav` gradient button and the hero "Book a demo" button trigger the same dialog.
+- Accessible: focus trap (from Radix Dialog), Escape to close, labeled inputs, error text tied via `aria-describedby`.
 
-### 3. Keep proportions and avoid manual re-sizing
-- Do not manually shrink individual widths, paddings, or font sizes inside the cards.
-- Scaling the whole stack guarantees that borders, shadows, rounded corners, waveform bars, and text all shrink proportionally.
+## Backend (email delivery)
+This requires backend infrastructure, so as prerequisites we will:
+1. Enable **Lovable Cloud** (needed to send email).
+2. Set up a **Lovable email domain** on `mayscribe.com` (or a delegated subdomain like `notify.mayscribe.com`) — the user completes DNS via the in-app setup dialog. Emails cannot send until the domain is verified; auth-only fallback doesn't apply here since this is an app email.
+3. **Scaffold app email templates** (creates the registry + server send helper + preview route).
 
-## Scope and exclusions
-- Only affects the desktop hero visual stack (the right-hand column of the hero section).
-- Mobile layout stays exactly as is: workspace/dictation/meds panels remain hidden below `md`.
-- No changes to copy, colors, tokens, section order, or other sections.
+Then implement:
+- A React Email template `demo-request-notification.tsx` in `src/lib/email-templates/` — internal notification styled simply (name, email, company, role, message, timestamp). Subject: `New demo request from {name}`.
+- Register the template in `src/lib/email-templates/registry.ts`.
+- A **server function** `submitDemoRequest` in `src/lib/demo-request.functions.ts` using `createServerFn` with a zod `inputValidator`. Handler:
+  - Re-validates input server-side.
+  - Calls `sendTemplateEmail('demo-request-notification', 'fshaher@mayscribe.com', { templateData: {...}, replyTo: submitter email, idempotencyKey: hash of email+timestamp })`.
+  - Returns `{ ok: true }` or throws a typed error.
+- The dialog calls the server fn via `useServerFn` on submit.
+
+No database table is created — this is purely a notification email. (If the user later wants a record of submissions, that can be added.)
 
 ## Files touched
-- `src/routes/index.tsx` — add a scaled wrapper around the existing desktop hero visual block.
+- `src/components/BookDemoDialog.tsx` (new)
+- `src/components/DemoDialogProvider.tsx` (new — context + hook)
+- `src/routes/__root.tsx` (mount provider)
+- `src/routes/index.tsx` (wire both "Book a demo" buttons to `openDemoDialog()`)
+- `src/lib/demo-request.functions.ts` (new server fn)
+- `src/lib/email-templates/demo-request-notification.tsx` (new template)
+- `src/lib/email-templates/registry.ts` (register template — created by scaffold step)
 
-## Verification
-- Check the desktop preview at 1440px: the three cards should appear ~25% smaller but otherwise identical in composition.
-- Check the mobile preview: no visual cards appear, and no regressions in hero text or CTAs.
+## Order of operations
+1. Enable Lovable Cloud.
+2. Prompt user to set up email domain for `mayscribe.com`.
+3. Scaffold app email templates.
+4. Add template + server fn + dialog + wiring.
+5. Verify by submitting the form once domain is verified.
+
+## Notes / confirmations needed
+- Recipient confirmed: `fshaher@mayscribe.com`.
+- Sender domain: I'll suggest `notify.mayscribe.com` during setup unless you prefer sending directly from `mayscribe.com`.
+- No CAPTCHA in v1; if spam becomes an issue we can add a honeypot field or Turnstile later.
