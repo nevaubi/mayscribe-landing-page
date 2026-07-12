@@ -204,7 +204,8 @@ export const QuickLookup = forwardRef<QuickLookupHandle>(function QuickLookup(_p
       if (ctl.signal.aborted) return;
       const meds =
         medsRes.status === "fulfilled" ? medsRes.value : fuzzyFallbackMeds(q);
-      const conditions = condRes.status === "fulfilled" ? condRes.value : [];
+      const conditions =
+        condRes.status === "fulfilled" ? condRes.value : fallbackConditions(q);
       const merged: LookupResult = { meds, conditions };
       cacheRef.current.set(q, merged);
       setResult(merged);
