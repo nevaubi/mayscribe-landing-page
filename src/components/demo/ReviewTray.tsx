@@ -1,15 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Span } from "./verify";
-import {
-  applyFormatToggles,
-  applyDeterministicFormat,
-  deterministicClean,
-  toAppliedPlainText,
-  FORMAT_TOGGLES,
-  type FormatToggle,
-} from "./format-options";
-import { verifyIntegrity } from "./formatIntegrity";
 import { formatAssist } from "@/lib/format-assist.functions";
 import { SmoothInterim } from "./SmoothInterim";
 
@@ -27,6 +18,7 @@ export interface HoldEntry {
 }
 
 type SectionKey = HoldEntry["section"];
+type FmtToggle = "spelling" | "autoFormat" | "doseUnits";
 
 interface Props {
   holds: HoldEntry[];
@@ -44,12 +36,73 @@ interface Props {
   canUndoFormat?: boolean;
 }
 
+interface DoseChange {
+  before: string;
+  after: string;
+  offset: number;
+  length: number;
+  accepted: boolean;
+}
+
+interface Preview {
+  before: string;
+  formatted: string;
+  doseChanges: DoseChange[];
+}
+
 const SECTION_LABELS: Record<SectionKey, string> = {
   subjective: "S",
   objective: "O",
   assessment: "A",
   plan: "P",
 };
+
+// Strip **bold** and "# HEADER" markers when writing back to the plain-text SOAP textarea.
+function toAppliedPlainText(markdownish: string): string {
+  const lines = markdownish.split("\n").map((ln) => {
+    const hm = ln.match(/^\s*#{1,6}\s+(.*)$/);
+    if (hm) return hm[1]!.toUpperCase();
+    return ln.replace(/\*\*(.+?)\*\*/g, "$1");
+  });
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+// Locate each dose change in the formatted string, in order, non-overlapping.
+function locateDoseChanges(
+  formatted: string,
+  changes: { before: string; after: string }[],
+): DoseChange[] {
+  const out: DoseChange[] = [];
+  let cursor = 0;
+  for (const c of changes) {
+    if (!c.before) continue;
+    const idx = formatted.indexOf(c.before, cursor);
+    if (idx < 0) continue;
+    out.push({
+      before: c.before,
+      after: c.after,
+      offset: idx,
+      length: c.before.length,
+      accepted: true,
+    });
+    cursor = idx + c.before.length;
+  }
+  return out;
+}
+
+// Splice accepted dose "after"s into the formatted string.
+function composeAppliedText(preview: Preview): string {
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const c of preview.doseChanges) {
+    if (c.offset < cursor) continue;
+    parts.push(preview.formatted.slice(cursor, c.offset));
+    parts.push(c.accepted ? c.after : c.before);
+    cursor = c.offset + c.length;
+  }
+  parts.push(preview.formatted.slice(cursor));
+  return parts.join("");
+}
 
 function renderTranscriptWithHighlights(
   text: string,
@@ -112,64 +165,7 @@ function renderTranscriptWithHighlights(
   return parts;
 }
 
-// Render markdownish text with **bold**, "# HEADER" and "- bullet" as real
-// preview styles. Preview-only — never persisted.
-function renderPreview(text: string, changedLines: Set<number>) {
-  const lines = text.split("\n");
-  return lines.map((ln, i) => {
-    const changed = changedLines.has(i);
-    const bg = changed ? "rgba(13,87,250,0.06)" : "transparent";
-
-    const headerMatch = ln.match(/^\s*#{1,6}\s+(.*)$/);
-    if (headerMatch) {
-      return (
-        <div key={i} style={{ background: bg, padding: "1px 4px", borderRadius: 3 }}>
-          <span
-            style={{
-              fontWeight: 700,
-              color: "#061338",
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              fontSize: 11,
-            }}
-          >
-            {headerMatch[1]}
-          </span>
-        </div>
-      );
-    }
-
-    const bulletMatch = ln.match(/^\s*[-•]\s+(.*)$/);
-    if (bulletMatch) {
-      return (
-        <div
-          key={i}
-          style={{
-            background: bg,
-            padding: "1px 4px 1px 14px",
-            borderRadius: 3,
-            position: "relative",
-          }}
-        >
-          <span style={{ position: "absolute", left: 2, color: "#46587E" }}>•</span>
-          {renderBold(bulletMatch[1]!)}
-        </div>
-      );
-    }
-
-    if (ln.trim() === "") {
-      return <div key={i} style={{ height: 6 }} />;
-    }
-
-    return (
-      <div key={i} style={{ background: bg, padding: "1px 4px", borderRadius: 3 }}>
-        {renderBold(ln)}
-      </div>
-    );
-  });
-}
-
-function renderBold(text: string): React.ReactNode[] {
+function renderBold(text: string, keyPrefix: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   const re = /\*\*(.+?)\*\*/g;
   let last = 0;
@@ -178,7 +174,7 @@ function renderBold(text: string): React.ReactNode[] {
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
     parts.push(
-      <strong key={k++} style={{ color: "#061338", fontWeight: 700 }}>
+      <strong key={`${keyPrefix}-b-${k++}`} style={{ color: "#061338", fontWeight: 700 }}>
         {m[1]}
       </strong>,
     );
@@ -188,13 +184,94 @@ function renderBold(text: string): React.ReactNode[] {
   return parts;
 }
 
-function diffChangedLines(before: string, after: string): Set<number> {
-  const a = new Set(before.split("\n").map((s) => s.trim()));
-  const changed = new Set<number>();
-  after.split("\n").forEach((ln, i) => {
-    if (ln.trim() && !a.has(ln.trim())) changed.add(i);
+// Render a formatted string with inline dose-change chips.
+function renderFormattedWithChips(
+  preview: Preview,
+  onToggle: (i: number) => void,
+): React.ReactNode {
+  // Split formatted into segments broken by dose-change offsets, then apply
+  // per-line rendering (headers/bullets/bold) to each plain segment.
+  const changes = preview.doseChanges;
+  const segments: Array<{ kind: "text"; text: string } | { kind: "chip"; index: number }> = [];
+  let cursor = 0;
+  changes.forEach((c, i) => {
+    if (c.offset > cursor) {
+      segments.push({ kind: "text", text: preview.formatted.slice(cursor, c.offset) });
+    }
+    segments.push({ kind: "chip", index: i });
+    cursor = c.offset + c.length;
   });
-  return changed;
+  segments.push({ kind: "text", text: preview.formatted.slice(cursor) });
+
+  // Flatten into a paragraph-oriented render. We render inline, using <br/> at newlines.
+  const out: React.ReactNode[] = [];
+  let key = 0;
+  for (const s of segments) {
+    if (s.kind === "chip") {
+      const c = changes[s.index]!;
+      out.push(
+        <button
+          key={`chip-${s.index}`}
+          onClick={() => onToggle(s.index)}
+          title={c.accepted ? "Click to reject — keep original wording" : "Click to accept the abbreviation"}
+          className="inline-flex items-center gap-1 mx-0.5 px-1.5 py-[1px] rounded border transition-colors align-baseline"
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            borderColor: c.accepted ? "#C9EEDB" : "#F2E8C8",
+            background: c.accepted ? "#F0FFF7" : "#FFF7E6",
+            color: c.accepted ? "#0F7A44" : "#8A6116",
+            lineHeight: 1.4,
+          }}
+        >
+          {c.accepted ? (
+            <>
+              <span style={{ textDecoration: "line-through", opacity: 0.55, fontWeight: 500 }}>{c.before}</span>
+              <span>→</span>
+              <span>{c.after}</span>
+              <span style={{ opacity: 0.7 }}>✓</span>
+            </>
+          ) : (
+            <>
+              <span>{c.before}</span>
+              <span style={{ opacity: 0.6 }}>(kept)</span>
+              <span style={{ opacity: 0.7 }}>↺</span>
+            </>
+          )}
+        </button>,
+      );
+      continue;
+    }
+    // Text segment: render with bold + newline handling; headers/bullets simplified.
+    const lines = s.text.split("\n");
+    lines.forEach((ln, li) => {
+      const hm = ln.match(/^\s*#{1,6}\s+(.*)$/);
+      const bm = ln.match(/^\s*[-•]\s+(.*)$/);
+      if (hm) {
+        out.push(
+          <span
+            key={`k-${key++}`}
+            style={{
+              fontWeight: 700,
+              color: "#061338",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+              fontSize: 11,
+              display: "inline",
+            }}
+          >
+            {hm[1]}
+          </span>,
+        );
+      } else if (bm) {
+        out.push(<span key={`k-${key++}`}>{"• "}{renderBold(bm[1]!, `k${key}`)}</span>);
+      } else {
+        out.push(<span key={`k-${key++}`}>{renderBold(ln, `k${key}`)}</span>);
+      }
+      if (li < lines.length - 1) out.push(<br key={`br-${key++}`} />);
+    });
+  }
+  return out;
 }
 
 export function ReviewTray({
@@ -214,20 +291,10 @@ export function ReviewTray({
 }: Props) {
   const [portalReady, setPortalReady] = useState(false);
   const [tab, setTab] = useState<"items" | "format">("items");
-  const [toggles, setToggles] = useState<Set<FormatToggle>>(
-    () =>
-      new Set<FormatToggle>([
-        "punctuation",
-        "sentenceCase",
-        "unitsAndAbbrev",
-        "abbrevPlus",
-        "spelling",
-        "structure",
-      ]),
+  const [toggles, setToggles] = useState<Set<FmtToggle>>(
+    () => new Set<FmtToggle>(["spelling", "autoFormat", "doseUnits"]),
   );
-  const [preview, setPreview] = useState<{ before: string; after: string } | null>(
-    null,
-  );
+  const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
@@ -261,22 +328,21 @@ export function ReviewTray({
   };
   const onHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     dragRef.current = null;
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* noop */ }
   };
 
-  // Items-tab display formatting is derived from deterministic toggles only.
-  const displayText = useMemo(() => {
-    const det = new Set<FormatToggle>();
-    (["punctuation", "unitsAndAbbrev", "sentenceCase", "abbrevPlus", "paragraphs"] as FormatToggle[])
-      .forEach((t) => { if (toggles.has(t)) det.add(t); });
-    return det.size === 0 ? sectionText : applyFormatToggles(sectionText, det);
-  }, [sectionText, toggles]);
-  const highlightHolds = toggles.size === 0 ? holds : [];
+  const displayText = sectionText;
+  const highlightHolds = holds;
+
+  const visibleFormat = useMemo(() => {
+    if (!preview) return "";
+    return composeAppliedText(preview);
+  }, [preview]);
 
   if (holds.length === 0 && !sectionText && !interim) return null;
   if (!portalReady) return null;
 
-  const toggle = (id: FormatToggle) =>
+  const toggle = (id: FmtToggle) =>
     setToggles((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -288,50 +354,56 @@ export function ReviewTray({
     setBusy(true);
     setWarning(null);
     try {
-      const det = new Set<FormatToggle>();
-      (["punctuation", "unitsAndAbbrev", "sentenceCase", "abbrevPlus", "paragraphs"] as FormatToggle[])
-        .forEach((t) => { if (toggles.has(t)) det.add(t); });
-
-      // Pre-clean: always-safe spacing/punctuation normalization.
-      let out = deterministicClean(sectionText);
-      out = applyDeterministicFormat(out, det);
-
-      const wantLLM = toggles.has("spelling") || toggles.has("structure");
-      if (wantLLM) {
-        const res = await formatAssist({
-          data: {
-            text: out,
-            toggles: {
-              spelling: toggles.has("spelling"),
-              structure: toggles.has("structure"),
-            },
-          },
-        });
-        if (res.ok && verifyIntegrity(out, res.formatted)) {
-          out = res.formatted;
-        } else {
-          setWarning("Structure formatting unavailable for this pass.");
-        }
+      if (toggles.size === 0) {
+        setWarning("Select at least one toggle to format.");
+        setBusy(false);
+        return;
       }
-
-      // Post-clean: normalize any spacing the LLM (or deterministic pass) left.
-      out = deterministicClean(out);
-
-      setPreview({ before: sectionText, after: out });
+      const res = await formatAssist({
+        data: {
+          text: sectionText,
+          toggles: {
+            spelling: toggles.has("spelling"),
+            autoFormat: toggles.has("autoFormat"),
+            doseUnits: toggles.has("doseUnits"),
+          },
+        },
+      });
+      if (!res.ok) {
+        setWarning("Formatting unavailable — try again.");
+        setBusy(false);
+        return;
+      }
+      const located = locateDoseChanges(res.formatted, res.doseChanges);
+      setPreview({
+        before: sectionText,
+        formatted: res.formatted,
+        doseChanges: located,
+      });
     } finally {
       setBusy(false);
     }
   }
 
+  function toggleDoseChange(i: number) {
+    setPreview((p) => {
+      if (!p) return p;
+      const next = p.doseChanges.slice();
+      next[i] = { ...next[i]!, accepted: !next[i]!.accepted };
+      return { ...p, doseChanges: next };
+    });
+  }
+
   function applyPreview() {
     if (!preview || !activeSection || !onApplyFormatted) return;
-    const plain = toAppliedPlainText(preview.after);
+    const composed = composeAppliedText(preview);
+    const plain = toAppliedPlainText(composed);
     onApplyFormatted(activeSection, plain);
     setPreview(null);
     setWarning(null);
   }
 
-  const changedLines = preview ? diffChangedLines(preview.before, preview.after) : new Set<number>();
+  const acceptedCount = preview?.doseChanges.filter((c) => c.accepted).length ?? 0;
 
   const node = (
     <div
@@ -351,7 +423,6 @@ export function ReviewTray({
           "0 24px 64px -24px rgba(5,18,56,0.28), 0 8px 20px -12px rgba(5,18,56,0.18)",
       }}
     >
-      {/* Header (drag handle) */}
       <div
         onPointerDown={onHeaderPointerDown}
         onPointerMove={onHeaderPointerMove}
@@ -378,7 +449,6 @@ export function ReviewTray({
         <span className="text-[9px] text-muted-foreground uppercase tracking-wider">drag</span>
       </div>
 
-      {/* Tab bar */}
       <div className="flex border-b border-border flex-shrink-0" data-no-drag>
         {(["items", "format"] as const).map((t) => (
           <button
@@ -398,45 +468,6 @@ export function ReviewTray({
 
       {tab === "items" && (
         <>
-          {/* Display-format chips (deterministic-only, view of transcript) */}
-          <div className="px-4 py-2 border-b border-border flex items-center gap-1.5 flex-wrap flex-shrink-0">
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mr-1">
-              View
-            </span>
-            {FORMAT_TOGGLES.filter((t) => !t.ai).map((t) => {
-              const on = toggles.has(t.id);
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => toggle(t.id)}
-                  title={t.description}
-                  className="text-[10px] px-2 py-0.5 rounded-full border transition-colors"
-                  style={{
-                    borderColor: on ? "#0D57FA" : "#D8E2F0",
-                    background: on ? "#EEF4FC" : "white",
-                    color: on ? "#0D57FA" : "#46587E",
-                    fontWeight: on ? 600 : 500,
-                  }}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setToggles(new Set())}
-              disabled={toggles.size === 0}
-              className="text-[10px] px-2 py-0.5 rounded-full border transition-colors ml-auto"
-              style={{
-                borderColor: "#D8E2F0",
-                background: "white",
-                color: toggles.size === 0 ? "#C7D0DE" : "#46587E",
-              }}
-            >
-              Original
-            </button>
-          </div>
-
-          {/* Transcript with highlights */}
           <div
             className="px-4 py-3 border-b border-border overflow-y-auto scrollbar-hide"
             style={{ maxHeight: 220 }}
@@ -533,18 +564,21 @@ export function ReviewTray({
 
       {tab === "format" && (
         <div className="flex flex-col overflow-hidden">
-          {/* Toggle chips */}
           <div className="px-4 py-2 border-b border-border flex items-center gap-1.5 flex-wrap flex-shrink-0">
             <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mr-1">
               Toggles
             </span>
-            {FORMAT_TOGGLES.map((t) => {
+            {[
+              { id: "spelling" as const, label: "Spelling", desc: "Fix spelling, spacing, punctuation, casing" },
+              { id: "autoFormat" as const, label: "Auto-format", desc: "Headers, bullets, paragraphs, bold critical values" },
+              { id: "doseUnits" as const, label: "Dose units", desc: "Abbreviate dosage units — each requires approval" },
+            ].map((t) => {
               const on = toggles.has(t.id);
               return (
                 <button
                   key={t.id}
                   onClick={() => toggle(t.id)}
-                  title={t.description}
+                  title={t.desc}
                   className="text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1"
                   style={{
                     borderColor: on ? "#0D57FA" : "#D8E2F0",
@@ -553,15 +587,13 @@ export function ReviewTray({
                     fontWeight: on ? 600 : 500,
                   }}
                 >
-                  {t.ai && (
-                    <span
-                      style={{
-                        width: 5, height: 5, borderRadius: 999,
-                        background: on ? "#0D57FA" : "#7A8AAC",
-                        display: "inline-block",
-                      }}
-                    />
-                  )}
+                  <span
+                    style={{
+                      width: 5, height: 5, borderRadius: 999,
+                      background: on ? "#0D57FA" : "#7A8AAC",
+                      display: "inline-block",
+                    }}
+                  />
                   {t.label}
                 </button>
               );
@@ -583,7 +615,7 @@ export function ReviewTray({
               )}
               <button
                 onClick={runFormatPipeline}
-                disabled={busy || (!sectionText && toggles.size === 0)}
+                disabled={busy || !sectionText}
                 className="text-[10px] px-2.5 py-1 rounded transition-colors font-medium"
                 style={{
                   background: busy ? "#C7D0DE" : "#0D57FA",
@@ -591,7 +623,7 @@ export function ReviewTray({
                   cursor: busy ? "wait" : "pointer",
                 }}
               >
-                {busy ? "Formatting…" : "Format section"}
+                {busy ? "Formatting…" : "Format"}
               </button>
             </div>
           </div>
@@ -604,9 +636,9 @@ export function ReviewTray({
 
           {!preview ? (
             <div className="px-4 py-6 text-center text-[11px] text-[#7A8AAC] flex-1">
-              Choose toggles, then <span className="text-[#0D57FA] font-medium">Format section</span> to preview.
+              Choose toggles, then <span className="text-[#0D57FA] font-medium">Format</span> to preview.
               <div className="mt-1 text-[10px]">
-                Bold and headers render in the preview only — the note stays plain text.
+                Dose-unit rewrites appear as chips — click to accept or reject each.
               </div>
             </div>
           ) : (
@@ -614,19 +646,33 @@ export function ReviewTray({
               <div className="px-4 pt-3 pb-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Before
               </div>
-              <div className="mx-4 mb-2 p-2 border border-border rounded bg-white text-[11px] whitespace-pre-wrap"
-                style={{ color: "#0B1F52", maxHeight: 140, overflowY: "auto" }}
+              <div
+                className="mx-4 mb-2 p-2 border border-border rounded bg-white text-[11px] whitespace-pre-wrap"
+                style={{ color: "#0B1F52", maxHeight: 120, overflowY: "auto" }}
               >
                 {preview.before || <span className="italic text-[#A3B0C8]">Empty.</span>}
               </div>
-              <div className="px-4 pt-1 pb-1 text-[9px] font-semibold uppercase tracking-wider text-[#0D57FA]">
-                After (preview)
+              <div className="px-4 pt-1 pb-1 flex items-center gap-2">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-[#0D57FA]">
+                  After (preview)
+                </span>
+                {preview.doseChanges.length > 0 && (
+                  <span className="text-[9px] text-[#46587E]">
+                    {acceptedCount}/{preview.doseChanges.length} dose abbrev.
+                  </span>
+                )}
               </div>
-              <div className="mx-4 mb-3 p-2 border rounded bg-[#F8FBFF] text-[11px] leading-relaxed"
-                style={{ borderColor: "#D8E7FF", color: "#0B1F52", maxHeight: 220, overflowY: "auto" }}
+              <div
+                className="mx-4 mb-3 p-2 border rounded bg-[#F8FBFF] text-[11px] leading-relaxed whitespace-pre-wrap"
+                style={{ borderColor: "#D8E7FF", color: "#0B1F52", maxHeight: 240, overflowY: "auto" }}
               >
-                {renderPreview(preview.after, changedLines)}
+                {renderFormattedWithChips(preview, toggleDoseChange)}
               </div>
+              {preview.doseChanges.length > 0 && (
+                <div className="px-4 -mt-1 mb-2 text-[9px] text-[#7A8AAC]">
+                  Click a chip to reject the abbreviation — that dose stays as the original wording.
+                </div>
+              )}
               <div className="px-4 pb-3 flex items-center justify-end gap-1.5">
                 <button
                   onClick={() => { setPreview(null); setWarning(null); }}
@@ -648,6 +694,9 @@ export function ReviewTray({
       )}
     </div>
   );
+
+  // Silence unused warnings for helper (used inside memo).
+  void visibleFormat;
 
   return createPortal(node, document.body);
 }
