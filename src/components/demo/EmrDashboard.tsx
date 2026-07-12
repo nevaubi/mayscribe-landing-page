@@ -235,6 +235,7 @@ export function EmrDashboard() {
     { section: SoapSection; start: number; end: number } | null
   >(null);
   const [signPulse, setSignPulse] = useState(false);
+  const [showReview, setShowReview] = useState(true);
 
   const activeSectionRef = useRef<SoapSection>("subjective");
   activeSectionRef.current = activeSoapSection;
@@ -520,6 +521,10 @@ export function EmrDashboard() {
       if (e.key === "F2") {
         e.preventDefault();
         toggleDictation();
+      }
+      if (e.key === "F1") {
+        e.preventDefault();
+        setShowReview((prev) => !prev);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -963,28 +968,29 @@ export function EmrDashboard() {
 
                     </div>
 
-                    {/* Review Panel — always visible during dictation or when holds exist */}
-                    {(holdEntries.length > 0 ||
-                      status === "listening" ||
-                      status === "connecting" ||
-                      interim.length > 0) && (
-                      <ReviewTray
-                        holds={holdEntries}
-                        activeIndex={activeHoldIndex}
-                        onSelect={(idx) => setActiveHoldIndex(idx)}
-                        onConfirm={(id, choice) => confirmHold(id, choice)}
-                        onDismiss={(id) => dismissHold(id)}
-                        onLookup={handleLookup}
-                        sectionText={soap[dictationTargetRef.current] ?? soap[activeSoapSection]}
-                        interim={interim}
-                        sectionLabel={
-                          dictationTargetRef.current === "subjective" ? "S · Subjective" :
-                          dictationTargetRef.current === "objective" ? "O · Objective" :
-                          dictationTargetRef.current === "assessment" ? "A · Assessment" :
-                          "P · Plan"
-                        }
-                      />
-                    )}
+                    {/* Review Panel — toggle with F1, visible during dictation or when holds exist */}
+                    {showReview &&
+                      (holdEntries.length > 0 ||
+                        status === "listening" ||
+                        status === "connecting" ||
+                        interim.length > 0) && (
+                        <ReviewTray
+                          holds={holdEntries}
+                          activeIndex={activeHoldIndex}
+                          onSelect={(idx) => setActiveHoldIndex(idx)}
+                          onConfirm={(id, choice) => confirmHold(id, choice)}
+                          onDismiss={(id) => dismissHold(id)}
+                          onLookup={handleLookup}
+                          sectionText={soap[dictationTargetRef.current] ?? soap[activeSoapSection]}
+                          interim={interim}
+                          sectionLabel={
+                            dictationTargetRef.current === "subjective" ? "S · Subjective" :
+                            dictationTargetRef.current === "objective" ? "O · Objective" :
+                            dictationTargetRef.current === "assessment" ? "A · Assessment" :
+                            "P · Plan"
+                          }
+                        />
+                      )}
 
                     <div className="px-4 py-2.5 border-t border-border bg-[#F8FAFC] flex items-center justify-between">
                       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
