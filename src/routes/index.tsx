@@ -461,7 +461,7 @@ function Footer() {
       <div className="max-w-[1200px] mx-auto px-6 lg:px-10 py-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="text-[16px] font-bold text-[color:var(--ink)]">MayScribe</div>
-          <div className="flex flex-wrap gap-6 text-[12.5px] font-medium text-[color:var(--ink-2)]">
+          <div className="flex flex-wrap gap-x-5 gap-y-2 sm:gap-6 text-[12.5px] font-medium text-[color:var(--ink-2)]">
             <a href="#">Product</a>
             <a href="#">Security</a>
             <a href="#">Compliance</a>
@@ -469,7 +469,7 @@ function Footer() {
           </div>
         </div>
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[11.5px] text-[color:var(--muted-ink)]">
-          <div>HIPAA-aligned · BAA-ready · SOC 2 Type I in progress</div>
+          <div>HIPAA-aligned · BAA-ready · SOC attestations on roadmap</div>
           <div>© 2026 MayScribe</div>
         </div>
       </div>
