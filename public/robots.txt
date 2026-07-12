@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /demo
+Disallow: /demo/unlock
 
 Sitemap: https://mayscribe.com/sitemap.xml
