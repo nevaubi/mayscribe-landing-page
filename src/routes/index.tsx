@@ -478,7 +478,7 @@ function Footer() {
             <a href="#">Product</a>
             <a href="#">Security</a>
             <a href="#">Compliance</a>
-            <Link to="/whitepaper">Whitepaper</Link>
+            <Link to="/whitepaper">Whitepaper preview</Link>
             <a href="#">Contact</a>
           </div>
         </div>
