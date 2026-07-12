@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, MicOff } from "lucide-react";
-import { useDictation } from "./useDictation";
+import { useDictation, type DGWord } from "./useDictation";
 import { DictationStrip } from "./DictationStrip";
+import { verify, DEMO_ACTIVE_MEDS, type Span } from "./verify";
+import { TextOverlay } from "./HighlightedTextarea";
+import { ReviewTray, type HoldEntry } from "./ReviewTray";
+import { dictationAssist } from "@/lib/dictation-assist.functions";
 import {
   Search,
   Bell,
