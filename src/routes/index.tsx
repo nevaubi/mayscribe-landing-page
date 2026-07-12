@@ -40,9 +40,10 @@ function NavLink({ children }: { children: React.ReactNode }) {
   );
 }
 
-function GradientButton({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function GradientButton({ children, className = "", onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) {
   return (
     <button
+      onClick={onClick}
       className={`bg-gradient-brand text-white shadow-btn rounded-[8px] px-4 h-10 text-[14px] font-semibold inline-flex items-center gap-1.5 ${className}`}
     >
       {children}
