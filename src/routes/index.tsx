@@ -346,23 +346,23 @@ function Compliance() {
     },
   ];
   return (
-    <section style={{ background: "var(--hero)" }} className="py-[76px]">
+    <section style={{ background: "var(--hero)" }} className="py-12 md:py-[76px]">
       <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
         <div className="text-center">
           <div className="text-[12px] font-bold tracking-[0.16em] text-[color:var(--brand)]">COMPLIANCE</div>
-          <h2 className="mt-3 text-[32px] font-bold text-[color:var(--ink)] tracking-[-0.01em]">
+          <h2 className="mt-3 text-[26px] md:text-[32px] font-bold text-[color:var(--ink)] tracking-[-0.01em]">
             A clear path to HIPAA, SOC 1, and SOC 2
           </h2>
-          <p className="mt-4 mx-auto max-w-[660px] text-[15.5px] leading-[1.6] text-[color:var(--ink-2)]">
+          <p className="mt-4 mx-auto max-w-[660px] text-[14.5px] md:text-[15.5px] leading-[1.6] text-[color:var(--ink-2)]">
             MayScribe ships HIPAA-aligned and BAA-ready. Independent attestations are scoped and staged, and every
             control is inspectable in your own environment along the way.
           </p>
         </div>
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-10 md:mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-[820px] mx-auto">
           {cards.map((c) => (
             <div
               key={c.stage}
-              className="bg-white rounded-[10px] p-6"
+              className="bg-white rounded-[10px] p-5 md:p-6"
               style={{ border: "1px solid var(--border-default)" }}
             >
               <div className="text-[12px] font-bold tracking-[0.14em] text-[color:var(--brand)]">{c.stage}</div>
