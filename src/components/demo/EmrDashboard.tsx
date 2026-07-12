@@ -367,6 +367,7 @@ export function EmrDashboard() {
                           }`}
                           rows={12}
                           style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "11.5px", lineHeight: "1.7" }}
+                          placeholder="Make sure your mic is enabled. Press Ctrl + space to dictate."
                           value={soap[section]}
                           onChange={e => setSoap(prev => ({ ...prev, [section]: e.target.value }))}
                         />
