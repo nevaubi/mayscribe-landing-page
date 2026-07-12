@@ -101,10 +101,15 @@ export function useDictation(opts: UseDictationOptions = {}) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (!res.ok) throw new Error(`token ${res.status}`);
-      const j = (await res.json()) as { access_token: string };
+      const text = await res.text();
+      if (!res.ok) {
+        console.error("[dictation] token endpoint failed", res.status, text);
+        throw new Error(`token ${res.status}`);
+      }
+      const j = JSON.parse(text) as { access_token: string };
       accessToken = j.access_token;
     } catch (e) {
+      console.error("[dictation] token fetch error", e);
       fail("Dictation unavailable — retry");
       return;
     }
@@ -156,7 +161,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
     // 3) socket
     let socket: WebSocket;
     try {
-      socket = new WebSocket(DG_URL, ["bearer", accessToken]);
+      socket = new WebSocket(DG_URL, ["token", accessToken]);
     } catch {
       fail("Dictation unavailable — retry");
       return;
@@ -211,12 +216,14 @@ export function useDictation(opts: UseDictationOptions = {}) {
       }
     };
 
-    socket.onerror = () => {
+    socket.onerror = (ev) => {
+      console.error("[dictation] socket error", ev);
       if (stoppingRef.current) return;
       fail("Dictation connection error");
     };
 
     socket.onclose = (ev) => {
+      console.warn("[dictation] socket close", ev.code, ev.reason);
       if (stoppingRef.current) return;
       if (ev.code === 1008 || ev.code === 4001 || ev.code === 4008) {
         setExpired(true);

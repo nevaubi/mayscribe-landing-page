@@ -39,15 +39,25 @@ export const Route = createFileRoute("/api/deepgram-token")({
           method: "POST",
           headers: { Authorization: `Token ${key}` },
         });
+        const text = await res.text();
         if (!res.ok) {
-          return new Response("Upstream error", { status: 502 });
+          return new Response(
+            JSON.stringify({ upstream_status: res.status, upstream_body: text }),
+            { status: 502, headers: { "Content-Type": "application/json" } },
+          );
         }
-        const data = (await res.json()) as {
-          access_token: string;
-          expires_in: number;
-        };
+        let data: { access_token?: string; key?: string; expires_in?: number };
+        try {
+          data = JSON.parse(text);
+        } catch {
+          return new Response(
+            JSON.stringify({ upstream_status: res.status, upstream_body: text }),
+            { status: 502, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        const token = data.access_token ?? data.key;
         return Response.json(
-          { access_token: data.access_token, expires_in: data.expires_in },
+          { access_token: token, expires_in: data.expires_in },
           { headers: { "Cache-Control": "no-store" } },
         );
       },

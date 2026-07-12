@@ -1,43 +1,47 @@
-# Why mayscribe.com isn't showing the dictation changes
+## Goal
 
-You said you republished after the dictation work but mayscribe.com still looks old on `/demo`. Custom domains serve the latest published build, so if the changes aren't there, one of four things is happening. Here's how to isolate it, in order.
+Get `/demo` live dictation working end-to-end. Two independent bugs are likely stacked:
 
-## 1. Compare the two published URLs first
+- `/api/deepgram-token` returns 502 → upstream `POST /v1/auth/grant` is failing.
+- Even with a token, the WebSocket to `wss://api.deepgram.com/v1/listen` is opened with the wrong subprotocol.
 
-Open both in a fresh incognito window and go straight to `/demo`:
+## Step 1 — Diagnose the 502 (no code change)
 
-- `https://scribe-clarity-landing.lovable.app/demo`
-- `https://mayscribe.com/demo`
+Once in build mode, hit our own endpoint against the preview and inspect the upstream response verbatim:
 
-- If the Lovable URL has the mic button + F2 strip and mayscribe.com doesn't → **it's a custom-domain/CDN cache**, not a build issue. See step 3.
-- If neither has it → **the publish didn't actually include the dictation commit**. See step 2.
-- If both have it → your browser is caching. Hard-reload (Cmd/Ctrl+Shift+R) or clear site data.
+- Curl `POST https://<preview>/api/deepgram-token` with an allowed `Origin` header and log the status + body.
+- Temporarily have the handler forward Deepgram's status + response text on failure (instead of a flat `502 Upstream error`) so we can see what Deepgram is actually saying (`invalid credentials`, `insufficient scope`, `plan not entitled`, etc.). Revert this verbose surface after diagnosis.
 
-## 2. If neither published URL shows it
+Two probable outcomes:
 
-The most likely cause: Publish was clicked before the dictation edits were committed in this session, so the deploy shipped the previous build. Fix:
+a) **Key is wrong type / lacks scope.** `/v1/auth/grant` requires a Deepgram-issued **Project API Key** with the "keys:write" (member) scope so it can mint a short-lived token. A restricted key with only `usage:write` (streaming) will 401/403 here. Fix: user rotates `DEEPGRAM_API_KEY` in Deepgram to a Project key with the right scope; no code change.
 
-- Open the Publish dialog and click **Update** again. Watch for the "Publishing…" state to complete (~1 minute).
-- Recheck `scribe-clarity-landing.lovable.app/demo` in incognito.
+b) **Endpoint / payload shape mismatch.** In that case adjust the handler to match what the real response returns (some accounts get `{ key, expires_in }` rather than `{ access_token }`).
 
-I'll also verify from my side that the publish record is current and that publish visibility is `public` (a `private` visibility would show an auth screen instead of stale content, but worth ruling out).
+## Step 2 — Fix the WebSocket subprotocol
 
-## 3. If only mayscribe.com is stale
+Independent of the token issue, browser `WebSocket(url, protocols)` auth against `wss://api.deepgram.com/v1/listen` uses the two-element subprotocol pair `["token", "<token>"]`, not `["bearer", "<token>"]`. Update `src/components/demo/useDictation.ts`:
 
-Custom domains sit behind a CDN edge. After a republish, propagation to every edge POP can lag a few minutes; a proxy in front of the domain (Cloudflare orange-cloud) can hold it much longer.
+```ts
+socket = new WebSocket(DG_URL, ["token", accessToken]);
+```
 
-- Wait 2–5 minutes, then hard-reload mayscribe.com/demo in incognito.
-- Try from a different network (phone on cellular) to bypass any local/ISP caching.
-- If you have Cloudflare or another proxy in front of mayscribe.com, purge its cache for `/demo` (or the whole zone).
+If that still closes with 1008, fall back to sending the token via the query string on connect — but only after confirming the token itself is valid via Step 1.
 
-## 4. Preview 502 on `/api/deepgram-token` (separate issue)
+## Step 3 — Better error surfacing in the UI
 
-Your console screenshot shows the preview returning 502 from the token endpoint. That is only about the preview environment right now, not about why the published UI looks old — but it means dictation won't actually run in preview until we fix it. Most likely cause: `DEEPGRAM_API_KEY` isn't set in the preview environment or the upstream `POST /v1/auth/grant` call failed. I'll address this in a follow-up once the publish question above is sorted, unless you want me to fold it into the same fix.
+Right now the hook collapses every failure into "Dictation unavailable — retry" or "session expired". While we're debugging, log `event.code` and `event.reason` from `socket.onclose` and the response text from the token fetch to the console so we can tell the two failure modes apart without another round-trip. Keep the user-facing copy the same.
 
-## What I'll do next
+## Step 4 — Verify
 
-After you tell me which of steps 1–3 matched (or after we look at the two URLs together), I'll either:
-- point you at the right cache purge, or
-- push a fresh publish and confirm the `/demo` bundle contains `DictationStrip` and the mic button.
+- In incognito on `mayscribe.com/demo`, unlock, press F2, speak.
+- Confirm: token endpoint returns 200 JSON, socket opens (status flips `connecting` → `listening`), waveform reacts to real audio, interim italic text updates, finals splice into the active SOAP textarea at the caret with the light blue flash.
+- Republish.
 
-No code changes are needed to answer this; the fix is a publish/cache action on your side. I'll only touch code if step 4 (the 502) turns out to need it.
+## Not in scope
+
+No landing-page, gate, or EMR-layout changes. The stale mayscribe.com view you saw is browser cache — incognito already shows the deployed build, so no publish action is needed for that.
+
+## Question before I execute
+
+Can you confirm the `DEEPGRAM_API_KEY` you saved is a **Deepgram Project API Key created in the Deepgram console** (not, e.g., a member/user login token or a key scoped only to streaming)? If you're not sure, I'll surface the exact upstream error message from Step 1 first and we'll know from that response whether the key needs to be rotated.
