@@ -442,6 +442,41 @@ function levenshtein(a: string, b: string, cap = 3): number {
   return dp[b.length];
 }
 
+// Common English words and clinical narrative terms that should never be
+// treated as medication names, even with fuzzy matching.
+const STOPWORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "been", "being", "but", "by",
+  "do", "does", "did", "for", "from", "had", "has", "have", "he", "her", "him",
+  "his", "how", "i", "in", "is", "it", "its", "me", "my", "no", "not", "of", "on",
+  "or", "our", "she", "that", "the", "their", "them", "then", "they", "this",
+  "those", "to", "too", "up", "us", "was", "we", "were", "what", "when", "where",
+  "which", "who", "why", "will", "with", "without", "would", "you", "your",
+  "patient", "patients", "presents", "presented", "presenting", "reports", "reported",
+  "reporting", "denies", "denied", "denying", "states", "stated", "notes", "noted",
+  "noting", "feels", "felt", "complains", "complained", "complaining", "exam",
+  "exams", "examination", "plan", "plans", "planned", "planning", "note", "notes",
+  "follow", "followed", "following", "followup", "follow-up", "blood", "pressure",
+  "heart", "rate", "pulse", "temp", "temperature", "chronic", "acute", "severe",
+  "mild", "moderate", "history", "histories", "symptom", "symptoms", "sign", "signs",
+  "diagnosis", "diagnoses", "condition", "conditions", "status", "stable",
+  "unstable", "improved", "worsening", "better", "worse", "pain", "discomfort",
+  "tolerated", "tolerate", "tolerating", "continued", "continue", "continues",
+  "started", "start", "starting", "stopped", "stop", "stopping", "increased",
+  "increase", "increasing", "decreased", "decrease", "decreasing", "change",
+  "changed", "changes", "adding", "add", "added", "remove", "removed", "removing",
+  "adjust", "adjusted", "adjusting", "monitor", "monitored", "monitoring",
+  "reassess", "reassessed", "reassessing", "return", "returned", "returning",
+  "precaution", "precautions", "allergy", "allergies", "allergic", "reaction",
+  "adverse", "effect", "effects", "side", "risk", "benefit", "benefits",
+  "indication", "indications", "contraindication", "contraindications",
+  "normal", "abnormal", "within", "outside", "above", "below", "high", "low",
+  "elevated", "decreased", "reduced", "increased", "well", "poorly", "good",
+  "bad", "positive", "negative", "resolved", "resolving", "ongoing", "active",
+  "inactive", "alert", "oriented", "cooperative", "pleasant", "difficult",
+  "ambulatory", "bedridden", "intact", "deny", "denies", "none", "no",
+  "deny", "denied",
+]);
+
 const MED_TOKENS: { canonical: string; token: string }[] = [];
 for (const m of MEDS) {
   MED_TOKENS.push({ canonical: m.name, token: m.name.toLowerCase() });
