@@ -7,6 +7,11 @@ import { ReviewTray, type HoldEntry } from "./ReviewTray";
 import { QuickLookup, type QuickLookupHandle } from "./QuickLookup";
 import { dictationAssist } from "@/lib/dictation-assist.functions";
 import {
+  getStrengthsAndForms,
+  checkDoseAgainstStrengths,
+  type Strength,
+} from "./lookupClient";
+import {
   Search,
   Bell,
   ChevronDown,
