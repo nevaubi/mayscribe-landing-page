@@ -1,0 +1,10 @@
+# MayScribe
+
+> Self-hosted, HIPAA-aligned clinical dictation with zero audio retention, deterministic verification, and PHI kept inside infrastructure the hospital controls.
+
+MayScribe is a clinician-controlled dictation product for hospitals and clinics. Audio is processed in memory and discarded at session end, models and audit logs run inside the customer's VPC, and clinical output is verified deterministically before it reaches the note.
+
+## Pages
+
+- [Home](/): Product overview, security posture, and compliance stance.
+- [Whitepaper](/whitepaper): Technical whitepaper covering architecture, zero-retention design, deterministic verification, and the path to HIPAA and SOC attestation.

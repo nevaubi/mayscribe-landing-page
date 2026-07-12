@@ -225,9 +225,14 @@ function FloatingDictation() {
         Auto-detecting specialty
       </div>
       <div className="mt-3 flex items-center gap-2">
-        {[Pause, Square, Flag].map((Icon, i) => (
+        {[
+          { Icon: Pause, label: "Pause dictation" },
+          { Icon: Square, label: "Stop dictation" },
+          { Icon: Flag, label: "Flag section" },
+        ].map(({ Icon, label }) => (
           <button
-            key={i}
+            key={label}
+            aria-label={label}
             className="h-8 w-8 rounded-[8px] inline-flex items-center justify-center"
             style={{ background: "var(--chip-blue-bg)", border: "1px solid var(--chip-blue-border)" }}
           >
