@@ -4,10 +4,56 @@
 export interface MedEntry {
   name: string;
   aliases: string[];
-  typicalDoseRange: { min: number; max: number; unit: string };
+  // Curated dose-range only on ~90 highest-confidence entries. Others rely on
+  // async RxTerms STRENGTHS_AND_FORMS lookup in verify.ts.
+  typicalDoseRange?: { min: number; max: number; unit: string };
   routes: string[];
   freqs: string[];
 }
+
+// Highest-confidence curated core: the demo patient's meds plus common
+// outpatient / inpatient drugs where hardcoded ranges are safe.
+const CORE_RANGE_NAMES = new Set<string>([
+  // Demo patient
+  "Lisinopril", "Metformin", "Atorvastatin",
+  // Cardiovascular
+  "Furosemide", "Hydrochlorothiazide", "Spironolactone", "Losartan", "Valsartan",
+  "Metoprolol", "Carvedilol", "Atenolol", "Propranolol", "Amlodipine",
+  "Diltiazem", "Verapamil", "Nitroglycerin", "Clonidine", "Digoxin",
+  "Amiodarone",
+  // Lipid
+  "Rosuvastatin", "Simvastatin", "Pravastatin", "Ezetimibe",
+  // Antiplatelet / Anticoagulant
+  "Aspirin", "Clopidogrel", "Warfarin", "Apixaban", "Rivaroxaban", "Heparin",
+  "Enoxaparin",
+  // Endocrine / Diabetes
+  "Glipizide", "Glimepiride", "Sitagliptin", "Empagliflozin", "Dapagliflozin",
+  "Semaglutide", "Liraglutide", "Insulin glargine", "Insulin lispro",
+  "Insulin aspart", "Levothyroxine",
+  // Steroids
+  "Prednisone", "Dexamethasone", "Methylprednisolone", "Hydrocortisone",
+  // Pulmonary
+  "Albuterol", "Ipratropium", "Tiotropium", "Fluticasone", "Budesonide",
+  "Montelukast",
+  // GI
+  "Omeprazole", "Pantoprazole", "Esomeprazole", "Ranitidine", "Famotidine",
+  "Ondansetron",
+  // Antibiotics
+  "Amoxicillin", "Amoxicillin-clavulanate", "Azithromycin", "Doxycycline",
+  "Ciprofloxacin", "Levofloxacin", "Cephalexin", "Ceftriaxone", "Clindamycin",
+  "Trimethoprim-sulfamethoxazole", "Nitrofurantoin", "Metronidazole",
+  "Vancomycin",
+  // Pain / neuro
+  "Acetaminophen", "Ibuprofen", "Naproxen", "Ketorolac", "Tramadol",
+  "Hydrocodone-acetaminophen", "Oxycodone", "Morphine", "Gabapentin",
+  "Pregabalin",
+  // Psych
+  "Sertraline", "Escitalopram", "Fluoxetine", "Citalopram", "Duloxetine",
+  "Venlafaxine", "Bupropion", "Trazodone", "Mirtazapine", "Alprazolam",
+  "Lorazepam", "Clonazepam", "Diazepam",
+  // GU / MSK
+  "Tamsulosin", "Finasteride", "Allopurinol", "Colchicine",
+]);
 
 // eslint-disable-next-line prettier/prettier
 export const MEDS: MedEntry[] = [
