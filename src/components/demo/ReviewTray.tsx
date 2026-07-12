@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Span } from "./verify";
 
 export interface HoldEntry {
@@ -26,11 +28,27 @@ const SECTION_LABELS: Record<HoldEntry["section"], string> = {
 };
 
 export function ReviewTray({ holds, activeIndex, onSelect, onConfirm, onDismiss, onLookup }: Props) {
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(typeof document !== "undefined");
+  }, []);
+
   if (holds.length === 0) return null;
-  return (
+  if (!portalReady) return null;
+
+  const node = (
     <div
-      className="border-t border-border bg-[#F8FAFC]"
-      style={{ fontFamily: "'Inter', sans-serif" }}
+      className="fixed right-8 top-24 w-[360px] overflow-hidden rounded-xl border bg-white/95 pointer-events-auto"
+      style={{
+        zIndex: 9997,
+        fontFamily: "'Inter', sans-serif",
+        borderColor: "#D8E2F0",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        boxShadow:
+          "0 24px 64px -24px rgba(5,18,56,0.28), 0 8px 20px -12px rgba(5,18,56,0.18)",
+      }}
     >
       <div className="px-4 py-2 border-b border-border flex items-center justify-between">
         <div className="text-[11px] font-semibold uppercase tracking-widest text-[#0D57FA]">
@@ -40,7 +58,7 @@ export function ReviewTray({ holds, activeIndex, onSelect, onConfirm, onDismiss,
           1 / 2 / 3 pick · Enter confirm · Esc dismiss
         </div>
       </div>
-      <div className="max-h-56 overflow-y-auto scrollbar-hide">
+      <div className="max-h-[360px] overflow-y-auto scrollbar-hide">
         {holds.map((h, i) => {
           const isActive = i === activeIndex;
           return (
@@ -108,4 +126,6 @@ export function ReviewTray({ holds, activeIndex, onSelect, onConfirm, onDismiss,
       </div>
     </div>
   );
+
+  return createPortal(node, document.body);
 }

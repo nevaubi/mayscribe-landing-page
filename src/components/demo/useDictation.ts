@@ -15,23 +15,63 @@ export interface UseDictationOptions {
   onFinal?: (
     text: string,
     words: DGWord[],
-    meta: { speechFinal: boolean },
+    meta: { speechFinal: boolean; start?: number; duration?: number },
   ) => void;
   onUtteranceEnd?: () => void;
   onError?: (msg: string) => void;
+  onQuietStop?: () => void;
 }
 
 // Latency-tuned: shorter endpointing, more aggressive utterance close.
 const DG_URL =
   "wss://api.deepgram.com/v1/listen?model=nova-3-medical&language=en&smart_format=true&interim_results=true&dictation=true&numerals=true&punctuate=true&endpointing=180&utterance_end_ms=1000";
 
+const QUIET_CLOSE_MS = 2000;
+const QUIET_LEVEL_THRESHOLD = 0.025;
+
+function wordsForLedger(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function diffAgainstLedger(transcript: string, ledger: string) {
+  if (!ledger) return transcript;
+  const ledgerWords = wordsForLedger(ledger);
+  const transcriptWords = wordsForLedger(transcript);
+  if (!ledgerWords.length || !transcriptWords.length) return transcript;
+
+  const ledgerKey = ledgerWords.join(" ");
+  const transcriptKey = transcriptWords.join(" ");
+  if (ledgerKey.endsWith(transcriptKey)) return "";
+
+  const startsWithLedger = ledgerWords.every(
+    (word, index) => transcriptWords[index] === word,
+  );
+  if (startsWithLedger && transcriptWords.length > ledgerWords.length) {
+    return transcript.split(/\s+/).slice(ledgerWords.length).join(" ").trim();
+  }
+
+  return transcript;
+}
+
 export function useDictation(opts: UseDictationOptions = {}) {
-  const { onInterim, onFinal, onUtteranceEnd, onError } = opts;
-  const optsRef = useRef({ onInterim, onFinal, onUtteranceEnd, onError });
-  optsRef.current = { onInterim, onFinal, onUtteranceEnd, onError };
+  const { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop } = opts;
+  const optsRef = useRef({
+    onInterim,
+    onFinal,
+    onUtteranceEnd,
+    onError,
+    onQuietStop,
+  });
+  optsRef.current = { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop };
 
   const [status, setStatus] = useState<DictationStatus>("idle");
   const [audioLevel, setAudioLevel] = useState(0);
+  const [quietMsRemaining, setQuietMsRemaining] = useState<number | null>(null);
   const [expired, setExpired] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -46,6 +86,9 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const smoothedLevelRef = useRef(0);
   const stoppingRef = useRef(false);
   const lastFinalRef = useRef<{ text: string; at: number } | null>(null);
+  const finalLedgerRef = useRef("");
+  const lastFinalEndRef = useRef(0);
+  const quietSinceRef = useRef<number | null>(null);
 
   // RAF-batched interim delivery to keep popup smooth.
   const pendingInterimRef = useRef<string | null>(null);
@@ -67,6 +110,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
     }
     pendingInterimRef.current = null;
     smoothedLevelRef.current = 0;
+    quietSinceRef.current = null;
+    setQuietMsRemaining(null);
     try {
       recorderRef.current?.state === "recording" && recorderRef.current.stop();
     } catch {}
@@ -136,6 +181,10 @@ export function useDictation(opts: UseDictationOptions = {}) {
     setErrorMessage(null);
     setExpired(false);
     lastFinalRef.current = null;
+    finalLedgerRef.current = "";
+    lastFinalEndRef.current = 0;
+    quietSinceRef.current = null;
+    setQuietMsRemaining(null);
     setDictationStatus("connecting");
 
     let stream: MediaStream;
@@ -210,7 +259,29 @@ export function useDictation(opts: UseDictationOptions = {}) {
         // Ease toward target for glide-y bars
         smoothedLevelRef.current +=
           (target - smoothedLevelRef.current) * 0.35;
-        setAudioLevel(smoothedLevelRef.current);
+        const level = smoothedLevelRef.current;
+        setAudioLevel(level);
+
+        if (statusRef.current === "listening") {
+          const now = Date.now();
+          if (level < QUIET_LEVEL_THRESHOLD) {
+            quietSinceRef.current ??= now;
+            const remaining = Math.max(
+              0,
+              QUIET_CLOSE_MS - (now - quietSinceRef.current),
+            );
+            setQuietMsRemaining(remaining);
+            if (remaining <= 0) {
+              optsRef.current.onQuietStop?.();
+              stop();
+              return;
+            }
+          } else {
+            quietSinceRef.current = null;
+            setQuietMsRemaining(null);
+          }
+        }
+
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
@@ -266,6 +337,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
         type?: string;
         is_final?: boolean;
         speech_final?: boolean;
+        start?: number;
+        duration?: number;
         channel?: {
           alternatives?: Array<{ transcript?: string; words?: DGWord[] }>;
         };
@@ -283,17 +356,40 @@ export function useDictation(opts: UseDictationOptions = {}) {
         const alt = msg.channel?.alternatives?.[0];
         const transcript = (alt?.transcript || "").trim();
         if (!transcript) return;
+        const startSec = typeof msg.start === "number" ? msg.start : undefined;
+        const durationSec =
+          typeof msg.duration === "number" ? msg.duration : undefined;
+        const endSec =
+          startSec != null && durationSec != null ? startSec + durationSec : undefined;
         if (msg.is_final) {
+          if (endSec != null && endSec <= lastFinalEndRef.current + 0.04) {
+            return;
+          }
+          const deltaText = diffAgainstLedger(transcript, finalLedgerRef.current);
+          if (!deltaText) return;
           const now = Date.now();
           const last = lastFinalRef.current;
-          if (last && last.text === transcript && now - last.at < 1500) return;
-          lastFinalRef.current = { text: transcript, at: now };
-          optsRef.current.onFinal?.(transcript, alt?.words ?? [], {
+          if (last && last.text === deltaText && now - last.at < 1500) return;
+          lastFinalRef.current = { text: deltaText, at: now };
+          finalLedgerRef.current = finalLedgerRef.current
+            ? `${finalLedgerRef.current} ${deltaText}`
+            : transcript;
+          if (endSec != null) {
+            lastFinalEndRef.current = Math.max(lastFinalEndRef.current, endSec);
+          }
+          optsRef.current.onFinal?.(deltaText, alt?.words ?? [], {
             speechFinal: Boolean(msg.speech_final),
+            start: startSec,
+            duration: durationSec,
           });
         } else {
+          if (endSec != null && endSec <= lastFinalEndRef.current + 0.04) {
+            return;
+          }
+          const interimDelta =
+            diffAgainstLedger(transcript, finalLedgerRef.current) || transcript;
           // Coalesce rapid interim events into the next animation frame.
-          pendingInterimRef.current = transcript;
+          pendingInterimRef.current = interimDelta;
           if (interimRafRef.current == null) {
             interimRafRef.current = requestAnimationFrame(() => {
               interimRafRef.current = null;
@@ -325,7 +421,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
       cleanup();
       setDictationStatus("idle");
     };
-  }, [cleanup, fail, setDictationStatus]);
+  }, [cleanup, fail, setDictationStatus, stop]);
 
   useEffect(() => {
     return () => {
@@ -334,5 +430,13 @@ export function useDictation(opts: UseDictationOptions = {}) {
     };
   }, [cleanup]);
 
-  return { status, start, stop, audioLevel, expired, errorMessage };
+  return {
+    status,
+    start,
+    stop,
+    audioLevel,
+    quietMsRemaining,
+    expired,
+    errorMessage,
+  };
 }

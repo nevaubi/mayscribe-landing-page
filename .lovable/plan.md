@@ -1,29 +1,31 @@
-# Finish the dictation refactor
+## Plan
 
-The expanded ~250-med lexicon and the DictationStrip type fix are already in. Three items from the previous plan remain.
+1. **Make dictation truly separate from the mock EMR**
+   - Remove `DictationStrip` from inside the SOAP editor card.
+   - Mount it once at the top/root of `EmrDashboard`, outside the EMR layout tree, relying on its portal so it floats above everything.
+   - Remove the inline `QuickLookup` panel from the EMR right rail as well; convert it to a floating popup/portal that opens only when triggered from Review Tray lookup.
 
-## 1. `src/components/demo/EmrDashboard.tsx` — detach dictation UI from the EMR
+2. **Replace the current floating recorder UI with a cleaner command-style popup**
+   - Fixed high-z-index panel centered near the bottom/front of the screen.
+   - Clear status, active SOAP section, elapsed time, quiet countdown, waveform, interim text, and last committed text.
+   - No visual integration into textareas, no highlights inside the text field, no EMR layout shifting.
 
-- Remove the toolbar mic button (`Mic` / `MicOff` trigger) and its `MicOff` import. F2 remains the only way to start/stop.
-- Remove the in-editor visual coupling to dictation:
-  - Drop the `ring-2 ring-inset ring-[#0D57FA]` "listening" ring on the active textarea.
-  - Drop the floating "Section: subjective" caption block that overlays the SOAP editor.
-  - Remove `<TextOverlay>` and its imports/props from the SOAP fields so no highlights (holds, dismissed, flash, med dotted underlines) render inside the textarea. Keep the plain textarea only.
-- Move `<DictationStrip>` out of the SOAP card. Mount it once at the root of the dashboard so the portal inside DictationStrip renders it as a floating popup above everything. Keep the same props already wired.
-- The Review Tray keeps its existing highlight semantics (it renders its own cards), so hold/dismiss state stays functional — just no in-editor tinting.
+3. **Fix streaming chunk ordering and insertion quality**
+   - Track Deepgram result order using audio timestamps / sequence guards so older interim/final chunks cannot overwrite newer text.
+   - Maintain a per-session committed transcript buffer to avoid duplicate or out-of-order final inserts.
+   - Only commit stable final speech chunks; interim text remains preview-only in the floating popup.
+   - Tighten spacing/punctuation rules so inserted SOAP text reads cleanly.
 
-## 2. `src/components/demo/QuickLookup.tsx` — conditions fallback
+4. **Auto-close dictation after 2 seconds of quiet**
+   - Add silence detection based on the live audio level.
+   - If listening and audio stays below a quiet threshold for 2 seconds, stop dictation automatically.
+   - Show a subtle “Quiet — closing…” countdown/state in the floating popup so it feels intentional.
 
-- Add a small local `CONDITIONS` constant (≈40 common conditions with ICD-10 hints) or import from the existing `clinical-knowledge.ts` if it already exports one.
-- When the `/conditions/v3/search` call rejects or returns non-2xx, fall back to a case-insensitive `includes` scan over that list, capped at 5, mirroring the existing meds fallback path.
-- No UI changes — same result group rendering.
+5. **Keep Review Tray functional but detached**
+   - Review Tray can remain in the editor footer for held verification items.
+   - Medication “Lookup” opens the floating Quick Lookup popup instead of scrolling/focusing an embedded right-rail section.
 
-## 3. Sanity pass
-
-- Confirm no dangling references to removed props/imports (`TextOverlay`, `MedMatch`, `medMatchesBySection`, `Mic`, `MicOff`, `isListening`).
-- Leave `HighlightedTextarea.tsx` in place; it's still imported by the lexicon hover reference infrastructure if needed later, but no route currently uses it after this change. Not deleted to avoid surprise.
-
-## Out of scope for this turn
-
-- Deepgram tuning, waveform smoothing, and RAF interim batching — already landed in `useDictation.ts` and `DictationStrip.tsx` in the prior turn.
-- Lexicon expansion — already committed.
+6. **Sanity check**
+   - Search for dangling embedded UI references.
+   - Verify no dictation popup DOM is nested in the mock EMR card visually or structurally.
+   - Verify F2 start/stop, auto-stop, and restart behavior still work.
