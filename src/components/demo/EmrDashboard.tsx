@@ -503,6 +503,150 @@ export function EmrDashboard() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleDictation]);
 
+  // Confirm / dismiss handlers used by ReviewTray + tray keybindings.
+  const confirmHold = useCallback((anchorId: string, choice: string) => {
+    const anchor = anchorsRef.current.find((a) => a.id === anchorId);
+    if (!anchor) return;
+    if (choice === "(dismiss)") {
+      // treat as dismiss
+      setAnchors((prev) =>
+        prev.map((a) => (a.id === anchorId ? { ...a, state: "resolved" } : a)),
+      );
+      setVerifyStats((s) => ({ ...s, held: Math.max(0, s.held - 1) }));
+      return;
+    }
+    const section = anchor.section;
+    const current = soapRef.current[section] ?? "";
+    const nextText =
+      current.slice(0, anchor.start) + choice + current.slice(anchor.end);
+    const delta = choice.length - (anchor.end - anchor.start);
+    setSoap((prev) => ({ ...prev, [section]: nextText }));
+    prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+    setAnchors((prev) =>
+      prev.map((a) => {
+        if (a.id === anchorId) {
+          return { ...a, state: "resolved", end: a.start + choice.length };
+        }
+        if (a.section === section && a.start > anchor.start) {
+          return { ...a, start: a.start + delta, end: a.end + delta };
+        }
+        return a;
+      }),
+    );
+    setVerifyStats((s) => ({ ...s, held: Math.max(0, s.held - 1) }));
+  }, []);
+
+  const dismissHold = useCallback((anchorId: string) => {
+    const anchor = anchorsRef.current.find((a) => a.id === anchorId);
+    if (!anchor) return;
+    // Replace placeholder with raw transcript, mark dismissed for amber underline
+    const section = anchor.section;
+    const current = soapRef.current[section] ?? "";
+    const nextText =
+      current.slice(0, anchor.start) + anchor.rawText + current.slice(anchor.end);
+    const delta = anchor.rawText.length - (anchor.end - anchor.start);
+    setSoap((prev) => ({ ...prev, [section]: nextText }));
+    prevSoapRef.current = { ...prevSoapRef.current, [section]: nextText };
+    setAnchors((prev) =>
+      prev.map((a) => {
+        if (a.id === anchorId) {
+          return {
+            ...a,
+            state: "dismissed",
+            end: a.start + anchor.rawText.length,
+          };
+        }
+        if (a.section === section && a.start > anchor.start) {
+          return { ...a, start: a.start + delta, end: a.end + delta };
+        }
+        return a;
+      }),
+    );
+    setVerifyStats((s) => ({ ...s, held: Math.max(0, s.held - 1) }));
+  }, []);
+
+  // Global keys while tray open
+  useEffect(() => {
+    if (openHolds.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === "INPUT" || target.tagName === "SELECT")) return;
+      const active = openHolds[activeHoldIndex];
+      if (!active) return;
+      if (e.key === "1" || e.key === "2" || e.key === "3") {
+        const idx = parseInt(e.key, 10) - 1;
+        const c = active.span.candidates[idx];
+        if (c) {
+          e.preventDefault();
+          confirmHold(active.id, c);
+        }
+      } else if (e.key === "Enter" && !e.shiftKey && !e.metaKey) {
+        // If focus is in textarea, don't hijack
+        if (target?.tagName === "TEXTAREA") return;
+        const c = active.span.candidates[0];
+        if (c) {
+          e.preventDefault();
+          confirmHold(active.id, c);
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        dismissHold(active.id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openHolds, activeHoldIndex, confirmHold, dismissHold]);
+
+  // Reset active hold pointer when holds change
+  useEffect(() => {
+    if (activeHoldIndex >= openHolds.length) {
+      setActiveHoldIndex(0);
+    }
+  }, [openHolds.length, activeHoldIndex]);
+
+  // Sign pulse when last hold clears
+  const prevOpenCountRef = useRef(0);
+  useEffect(() => {
+    if (prevOpenCountRef.current > 0 && openHolds.length === 0) {
+      setSignPulse(true);
+      const t = window.setTimeout(() => setSignPulse(false), 800);
+      return () => clearTimeout(t);
+    }
+    prevOpenCountRef.current = openHolds.length;
+  }, [openHolds.length]);
+
+  // Manual-edit anchor tracking: when the user edits a textarea by hand,
+  // shift anchors past the edit point by the length delta.
+  const handleManualEdit = useCallback(
+    (section: SoapSection, newValue: string) => {
+      const prev = prevSoapRef.current[section] ?? "";
+      if (prev === newValue) return;
+      // Find common prefix
+      let p = 0;
+      const minLen = Math.min(prev.length, newValue.length);
+      while (p < minLen && prev[p] === newValue[p]) p++;
+      const delta = newValue.length - prev.length;
+      // Remove or shift anchors intersecting the edited region
+      setAnchors((cur) =>
+        cur
+          .map((a) => {
+            if (a.section !== section) return a;
+            if (a.end <= p) return a; // before edit
+            if (a.start >= p) {
+              return { ...a, start: a.start + delta, end: a.end + delta };
+            }
+            // intersects — invalidate this anchor
+            return null;
+          })
+          .filter((a): a is Anchor => a !== null),
+      );
+      prevSoapRef.current = { ...prevSoapRef.current, [section]: newValue };
+    },
+    [],
+  );
+
+
+
   const draftTime = (lastCommitAt ?? new Date(2026, 6, 12, 9, 41))
     .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
