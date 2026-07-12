@@ -121,8 +121,6 @@ export function DictationStrip({
           backdropFilter: "blur(10px)",
           WebkitBackdropFilter: "blur(10px)",
           boxShadow:
-            "0 20px 48px -16px rgba(5,18,56,0.20), 0 4px 12px -4px rgba(5,18,56,0.10)",
-          boxShadow:
             "0 28px 72px -24px rgba(5,18,56,0.28), 0 10px 22px -12px rgba(5,18,56,0.18)",
           width: "min(760px, calc(100vw - 48px))",
         }}
@@ -235,111 +233,6 @@ export function DictationStrip({
             <X className="h-4 w-4" />
           </button>
         </div>
-      </div>
-    </div>
-  );
-
-  return createPortal(node, document.body);
-}
-              <span
-                className="absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping"
-                style={{ background: dotColor }}
-              />
-            )}
-            <span
-              className="relative inline-flex rounded-full h-2 w-2"
-              style={{ background: dotColor }}
-            />
-          </span>
-          <span
-            className="text-[11px] font-semibold"
-            style={{ color: showError ? "#B42318" : "#061338" }}
-          >
-            {label}
-          </span>
-        </div>
-
-        {/* Timer */}
-        <span
-          className="text-[11px] font-mono tabular-nums"
-          style={{ color: "#7A8AAC" }}
-        >
-          {elapsed}
-        </span>
-
-        {/* Section chip */}
-        <span
-          className="text-[10px] font-semibold uppercase tracking-wider rounded-md px-1.5 py-0.5"
-          style={{
-            background: "#EEF6FF",
-            color: "#0D57FA",
-            border: "1px solid #D8E7FF",
-          }}
-        >
-          {SECTION_LABEL[section] ?? section}
-        </span>
-
-        {/* Waveform */}
-        <div className="flex items-center gap-[3px] h-5 px-1">
-          {Array.from({ length: BAR_COUNT }).map((_, i) => {
-            const phase = 0.55 + 0.45 * Math.sin((i / BAR_COUNT) * Math.PI);
-            const h = Math.max(2, Math.min(20, audioLevel * 44 * phase + 2));
-            return (
-              <div
-                key={i}
-                style={{
-                  width: 2.5,
-                  height: `${h}px`,
-                  borderRadius: 2,
-                  background:
-                    "linear-gradient(180deg,#0B5DFF 0%,#0FD1D6 100%)",
-                  opacity: status === "listening" ? 1 : 0.35,
-                }}
-              />
-            );
-          })}
-        </div>
-
-        {/* Preview */}
-        <div className="flex-1 min-w-0 overflow-hidden">
-          <div
-            className="text-[12px] whitespace-nowrap overflow-hidden text-ellipsis text-right rounded px-1.5 py-0.5 transition-colors"
-            style={{
-              color: showError
-                ? "#B42318"
-                : flashCommit
-                  ? "#061338"
-                  : "#7A8AAC",
-              fontStyle: flashCommit ? "normal" : "italic",
-              background: flashCommit ? "#EEF4FC" : "transparent",
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-            title={showError ? (errorMessage ?? "") : previewText}
-          >
-            {showError
-              ? expired
-                ? "press F2 to resume"
-                : (errorMessage ?? "")
-              : previewText
-                ? previewText.length > 96
-                  ? "…" + previewText.slice(-96)
-                  : previewText
-                : status === "listening"
-                  ? "…"
-                  : ""}
-          </div>
-        </div>
-
-        {/* Stop */}
-        <button
-          onClick={onStop}
-          className="h-6 w-6 rounded-md border flex items-center justify-center hover:bg-slate-50 transition-colors"
-          style={{ borderColor: "#D8E2F0", color: "#46587E" }}
-          aria-label="Stop dictation (F2)"
-          title="Stop (F2)"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
       </div>
     </div>
   );
