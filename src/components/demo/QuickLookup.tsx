@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { Search, X } from "lucide-react";
 import { MEDS } from "./lexicon";
 
@@ -140,6 +141,8 @@ function fallbackConditions(q: string): CondResult[] {
 }
 
 export const QuickLookup = forwardRef<QuickLookupHandle>(function QuickLookup(_props, ref) {
+  const [portalReady, setPortalReady] = useState(false);
+  const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [result, setResult] = useState<LookupResult | null>(null);
@@ -154,13 +157,17 @@ export const QuickLookup = forwardRef<QuickLookupHandle>(function QuickLookup(_p
   const abortRef = useRef<AbortController | null>(null);
   const cacheRef = useRef<Map<string, LookupResult>>(new Map());
 
+  useEffect(() => {
+    setPortalReady(typeof document !== "undefined");
+  }, []);
+
   useImperativeHandle(ref, () => ({
     openWith: (q: string) => {
+      setVisible(true);
       setQuery(q);
       window.requestAnimationFrame(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
-        rootRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       });
     },
   }));
@@ -241,7 +248,7 @@ export const QuickLookup = forwardRef<QuickLookupHandle>(function QuickLookup(_p
           setExpandedMed((p) => (p === item.key ? null : item.key));
         }
       } else if (e.key === "Escape") {
-        setQuery("");
+        setVisible(false);
       }
     },
     [flatItems, activeIdx],
@@ -266,12 +273,36 @@ export const QuickLookup = forwardRef<QuickLookupHandle>(function QuickLookup(_p
     result.meds.length === 0 &&
     result.conditions.length === 0;
 
-  return (
-    <div ref={rootRef} className="border-b border-border">
-      <div className="px-3 py-2.5 flex items-center justify-between">
+  if (!portalReady || !visible) return null;
+
+  const node = (
+    <div
+      className="fixed right-8 bottom-28 pointer-events-none"
+      style={{ zIndex: 9998, fontFamily: "'Inter', sans-serif" }}
+    >
+      <div
+        ref={rootRef}
+        className="pointer-events-auto w-[320px] overflow-hidden rounded-xl border bg-white/95 shadow-card"
+        style={{
+          borderColor: "#D8E2F0",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          boxShadow:
+            "0 24px 64px -24px rgba(5,18,56,0.28), 0 8px 20px -12px rgba(5,18,56,0.18)",
+        }}
+      >
+      <div className="px-3 py-2.5 flex items-center justify-between border-b border-border">
         <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
           Clinical Lookup
         </span>
+        <button
+          type="button"
+          aria-label="Close lookup"
+          onClick={() => setVisible(false)}
+          className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted"
+        >
+          <X className="w-3 h-3" />
+        </button>
       </div>
       <div className="px-3 pb-3">
         <div className="relative">
@@ -423,6 +454,9 @@ export const QuickLookup = forwardRef<QuickLookupHandle>(function QuickLookup(_p
           </div>
         )}
       </div>
+      </div>
     </div>
   );
+
+  return createPortal(node, document.body);
 });
