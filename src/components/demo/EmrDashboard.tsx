@@ -1029,6 +1029,7 @@ export function EmrDashboard() {
                         onSelect={(idx) => setActiveHoldIndex(idx)}
                         onConfirm={(id, choice) => confirmHold(id, choice)}
                         onDismiss={(id) => dismissHold(id)}
+                        onLookup={handleLookup}
                       />
                     )}
 
