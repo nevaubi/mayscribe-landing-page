@@ -135,7 +135,7 @@ export function DictationStrip({
           {elapsed}
         </span>
 
-        {/* Interim / error text */}
+        {/* Interim / error text — show tail so newest words are visible */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <div
             className="text-[12px] italic text-left whitespace-nowrap overflow-hidden text-ellipsis"
@@ -148,7 +148,9 @@ export function DictationStrip({
               ? expired
                 ? "press F2 to resume"
                 : (errorMessage ?? "")
-              : interim || (status === "listening" ? "…" : "")}
+              : interim
+                ? (interim.length > 90 ? "…" + interim.slice(-90) : interim)
+                : (status === "listening" ? "…" : "")}
           </div>
         </div>
 
