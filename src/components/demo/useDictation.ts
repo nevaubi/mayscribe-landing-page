@@ -386,8 +386,10 @@ export function useDictation(opts: UseDictationOptions = {}) {
           if (endSec != null && endSec <= lastFinalEndRef.current + 0.04) {
             return;
           }
+          const interimDelta =
+            diffAgainstLedger(transcript, finalLedgerRef.current) || transcript;
           // Coalesce rapid interim events into the next animation frame.
-          pendingInterimRef.current = transcript;
+          pendingInterimRef.current = interimDelta;
           if (interimRafRef.current == null) {
             interimRafRef.current = requestAnimationFrame(() => {
               interimRafRef.current = null;
