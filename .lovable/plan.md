@@ -1,20 +1,26 @@
 ## Plan
 
-Fix the current Deepgram dictation failure by correcting the browser WebSocket authentication method.
+1. **Stabilize dictation start/stop/restart**
+   - Make stopping fully reset the microphone, recorder, socket, status, interim text, and timer before a new start is allowed.
+   - Prevent stale WebSocket close/error callbacks from overwriting the next session state.
+   - Add a short reconnect-safe session guard so F2/mic can stop and start repeatedly.
 
-### What I found
-- `/api/deepgram-token` is now returning `200`, so the backend token proxy is working.
-- The WebSocket fails because the client currently sends the temporary token as a `?token=` query parameter, which Deepgram rejects with `401 Invalid credentials`.
-- A direct handshake test confirms Deepgram accepts the temporary token when sent as browser WebSocket subprotocol auth: `["bearer", accessToken]`.
+2. **Improve live streaming text behavior**
+   - Treat interim transcript as a temporary preview instead of repeatedly inserting it into the SOAP field.
+   - Keep final Deepgram results as the only committed text.
+   - Clear interim text reliably on final result, stop, error, or restart.
 
-### Changes to make
-1. Update `src/components/demo/useDictation.ts`:
-   - Replace query-string token auth with `new WebSocket(DG_URL, ["bearer", accessToken])`.
-   - Remove the browser REST handshake probe to `api.deepgram.com`, since it is CORS-blocked and only creates noisy console errors.
-2. Keep the existing token proxy and EMR dictation UI unchanged.
-3. Verify the token endpoint still returns successfully and the WebSocket opens with the corrected auth path.
+3. **Fix caret-aware insertion**
+   - Track the active textarea and caret immediately before dictation starts.
+   - Insert finalized text at the last known caret position, with clean spacing/punctuation handling.
+   - Restore focus and caret position after insertion without forcing the textarea to jump awkwardly.
 
-### Expected result
-- Pressing F2 / the mic button should connect instead of closing with `1006`.
-- The CORS probe error should disappear.
-- Dictation can stream into the active SOAP field as originally intended.
+4. **Make UI feedback clearer**
+   - Keep the floating dictation strip visible while connecting/listening/error.
+   - Show clean status messages for mic blocked, connection failure, session expired, and restart needed.
+   - Preserve the existing flash feedback when final text lands in the active SOAP section.
+
+5. **Verify**
+   - Check that F2 and the mic button can start, stop, and restart.
+   - Confirm final transcript inserts into the selected SOAP section at the caret.
+   - Confirm no duplicate/garbled text is committed from interim streaming.
