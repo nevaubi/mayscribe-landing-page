@@ -270,7 +270,7 @@ function SuggestedMeds() {
   );
 }
 
-function Hero() {
+function Hero({ onBookDemo }: { onBookDemo: () => void }) {
   return (
     <section className="relative overflow-hidden" style={{ background: "var(--hero)" }}>
       <div
@@ -280,7 +280,7 @@ function Hero() {
           background: "radial-gradient(closest-side, rgba(15,209,214,0.35), rgba(11,93,255,0.10) 55%, transparent 75%)",
         }}
       />
-      <Nav />
+      <Nav onBookDemo={onBookDemo} />
       <div className="max-w-[1280px] mx-auto px-6 lg:px-10 pb-14 pt-4 lg:pb-24 lg:pt-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-5">
@@ -297,6 +297,7 @@ function Hero() {
             </p>
             <div className="mt-7 lg:mt-8 flex flex-wrap gap-3">
               <button
+                onClick={onBookDemo}
                 className="bg-white rounded-[8px] h-11 lg:h-12 px-5 text-[14.5px] lg:text-[15px] font-semibold text-[color:var(--ink)] inline-flex items-center gap-2 flex-1 sm:flex-none justify-center"
                 style={{ border: "1px solid var(--border-strong)" }}
               >
