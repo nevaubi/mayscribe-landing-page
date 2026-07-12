@@ -971,11 +971,7 @@ export function EmrDashboard() {
                     </div>
 
                     {/* Review Panel — toggle with F1, visible during dictation or when holds exist */}
-                    {showReview &&
-                      (holdEntries.length > 0 ||
-                        status === "listening" ||
-                        status === "connecting" ||
-                        interim.length > 0) && (
+                    {showReview && (
                         <ReviewTray
                           holds={holdEntries}
                           activeIndex={activeHoldIndex}
