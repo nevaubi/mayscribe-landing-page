@@ -963,8 +963,11 @@ export function EmrDashboard() {
 
                     </div>
 
-                    {/* Review Tray */}
-                    {holdEntries.length > 0 && (
+                    {/* Review Panel — always visible during dictation or when holds exist */}
+                    {(holdEntries.length > 0 ||
+                      status === "listening" ||
+                      status === "connecting" ||
+                      interim.length > 0) && (
                       <ReviewTray
                         holds={holdEntries}
                         activeIndex={activeHoldIndex}
@@ -972,6 +975,14 @@ export function EmrDashboard() {
                         onConfirm={(id, choice) => confirmHold(id, choice)}
                         onDismiss={(id) => dismissHold(id)}
                         onLookup={handleLookup}
+                        sectionText={soap[dictationTargetRef.current] ?? soap[activeSoapSection]}
+                        interim={interim}
+                        sectionLabel={
+                          dictationTargetRef.current === "subjective" ? "S · Subjective" :
+                          dictationTargetRef.current === "objective" ? "O · Objective" :
+                          dictationTargetRef.current === "assessment" ? "A · Assessment" :
+                          "P · Plan"
+                        }
                       />
                     )}
 
