@@ -242,6 +242,7 @@ export function EmrDashboard() {
   >(null);
   const [signPulse, setSignPulse] = useState(false);
   const [showReview, setShowReview] = useState(true);
+  const [formatUndo, setFormatUndo] = useState<{ section: SoapSection; prev: string } | null>(null);
 
   const activeSectionRef = useRef<SoapSection>("subjective");
   activeSectionRef.current = activeSoapSection;
@@ -380,6 +381,7 @@ export function EmrDashboard() {
         end: insertOffset + leadPrefix.length + committedText.length,
       });
       setLastCommitAt(new Date());
+      setFormatUndo(null);
       window.setTimeout(() => setFlashRange(null), 600);
 
       // Restore caret
@@ -777,6 +779,7 @@ export function EmrDashboard() {
     (section: SoapSection, newValue: string) => {
       const prev = prevSoapRef.current[section] ?? "";
       if (prev === newValue) return;
+      setFormatUndo((u) => (u && u.section === section ? null : u));
       // Find common prefix
       let p = 0;
       const minLen = Math.min(prev.length, newValue.length);
@@ -1115,6 +1118,23 @@ export function EmrDashboard() {
                             dictationTargetRef.current === "assessment" ? "A · Assessment" :
                             "P · Plan"
                           }
+                          activeSection={dictationTargetRef.current ?? activeSoapSection}
+                          onApplyFormatted={(section, plain) => {
+                            const prev = soapRef.current[section] ?? "";
+                            setFormatUndo({ section, prev });
+                            setSoap((s) => ({ ...s, [section]: plain }));
+                            prevSoapRef.current = { ...prevSoapRef.current, [section]: plain };
+                            // Format changes reflow offsets; drop stale anchors for that section.
+                            setAnchors((cur) => cur.filter((a) => a.section !== section));
+                          }}
+                          onUndoFormat={() => {
+                            if (!formatUndo) return;
+                            const { section, prev } = formatUndo;
+                            setSoap((s) => ({ ...s, [section]: prev }));
+                            prevSoapRef.current = { ...prevSoapRef.current, [section]: prev };
+                            setFormatUndo(null);
+                          }}
+                          canUndoFormat={!!formatUndo}
                         />
                       )}
 
