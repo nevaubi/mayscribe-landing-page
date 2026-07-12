@@ -284,29 +284,29 @@ function Hero() {
       <div className="max-w-[1280px] mx-auto px-6 lg:px-10 pb-14 pt-4 lg:pb-24 lg:pt-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-5">
-            <h1 className="text-[44px] sm:text-[56px] lg:text-[64px] font-bold leading-[1.05] tracking-[-0.02em] text-[color:var(--ink)]">
+            <h1 className="text-[38px] sm:text-[56px] lg:text-[64px] font-bold leading-[1.08] lg:leading-[1.05] tracking-[-0.02em] text-[color:var(--ink)]">
               Clinical
               <br />
               documentation.
               <br />
               <span style={{ color: "#3D5CA1" }}>Done right.</span>
             </h1>
-            <p className="mt-6 max-w-[540px] text-[18px] leading-[28px] text-[color:var(--ink-2)]">
+            <p className="mt-5 lg:mt-6 max-w-[540px] text-[15.5px] lg:text-[18px] leading-[24px] lg:leading-[28px] text-[color:var(--ink-2)]">
               A clinician-controlled dictation experience with confidence-aware review, medication intelligence, and
               fast insertion into the existing note workflow.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button className="bg-[color:var(--brand-deep)] text-white rounded-[8px] h-12 px-5 text-[15px] font-semibold inline-flex items-center gap-2 shadow-btn">
+            <div className="mt-7 lg:mt-8 flex flex-wrap gap-3">
+              <button className="bg-[color:var(--brand-deep)] text-white rounded-[8px] h-11 lg:h-12 px-5 text-[14.5px] lg:text-[15px] font-semibold inline-flex items-center gap-2 shadow-btn flex-1 sm:flex-none justify-center">
                 Start dictating <ArrowRight className="h-4 w-4" />
               </button>
               <button
-                className="bg-white rounded-[8px] h-12 px-5 text-[15px] font-semibold text-[color:var(--ink)] inline-flex items-center gap-2"
+                className="bg-white rounded-[8px] h-11 lg:h-12 px-5 text-[14.5px] lg:text-[15px] font-semibold text-[color:var(--ink)] inline-flex items-center gap-2 flex-1 sm:flex-none justify-center"
                 style={{ border: "1px solid var(--border-strong)" }}
               >
                 Book a demo <ArrowRight className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-10 flex flex-wrap gap-x-10 gap-y-3 text-[16px] font-semibold text-[color:var(--ink-2)]">
+            <div className="mt-8 lg:mt-10 flex flex-wrap gap-x-6 lg:gap-x-10 gap-y-2 lg:gap-y-3 text-[14px] lg:text-[16px] font-semibold text-[color:var(--ink-2)]">
               <span>HIPAA-aligned</span>
               <span>Secure by design</span>
               <span>No default retention</span>
