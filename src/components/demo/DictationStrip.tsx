@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Mic, X } from "lucide-react";
 import type { DictationStatus } from "./useDictation";
+import { SmoothInterim } from "./SmoothInterim";
 
 interface Props {
   status: DictationStatus;
@@ -14,6 +15,10 @@ interface Props {
   expired: boolean;
   lastCommit: string | null;
   onStop: () => void;
+  /** Number of open holds — shown as blue badge on the F1 chip. */
+  holdCount?: number;
+  /** True when the review tray is closed. Enables the amber pulse. */
+  reviewTrayClosed?: boolean;
 }
 
 const BAR_COUNT = 10;
@@ -27,12 +32,15 @@ const SECTION_LABEL: Record<string, string> = {
 export function DictationStrip({
   status,
   audioLevel,
+  interim,
   section,
   startedAt,
   quietMsRemaining,
   errorMessage,
   expired,
   onStop,
+  holdCount = 0,
+  reviewTrayClosed = true,
 }: Props) {
   const visible = status !== "idle";
   const [portalReady, setPortalReady] = useState(false);
