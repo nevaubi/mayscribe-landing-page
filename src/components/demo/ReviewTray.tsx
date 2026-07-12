@@ -25,7 +25,7 @@ const SECTION_LABELS: Record<HoldEntry["section"], string> = {
   plan: "P",
 };
 
-export function ReviewTray({ holds, activeIndex, onSelect, onConfirm, onDismiss }: Props) {
+export function ReviewTray({ holds, activeIndex, onSelect, onConfirm, onDismiss, onLookup }: Props) {
   if (holds.length === 0) return null;
   return (
     <div
