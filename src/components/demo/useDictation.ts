@@ -35,7 +35,7 @@ const DG_URL_BASE =
 const DG_URL_PCM =
   DG_URL_BASE + "&encoding=linear16&sample_rate=16000&channels=1";
 
-const QUIET_CLOSE_MS = 2000;
+const QUIET_CLOSE_MS = 3000;
 const QUIET_LEVEL_THRESHOLD = 0.025;
 // ~10 min at 16kHz mono int16 = 9.6M samples.
 const PCM_BUFFER_CAP_SAMPLES = 16000 * 60 * 10;
