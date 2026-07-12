@@ -112,6 +112,33 @@ async function fetchConditions(q: string, signal: AbortSignal): Promise<CondResu
   }));
 }
 
+// Local condition list used only when the NLM /conditions endpoint fails.
+const CONDITIONS_FALLBACK: string[] = [
+  "Hypertension", "Type 2 diabetes mellitus", "Type 1 diabetes mellitus",
+  "Hyperlipidemia", "Coronary artery disease", "Congestive heart failure",
+  "Atrial fibrillation", "Chronic kidney disease", "End-stage renal disease",
+  "Asthma", "Chronic obstructive pulmonary disease", "Obstructive sleep apnea",
+  "Pneumonia", "Urinary tract infection", "Cellulitis", "Sepsis",
+  "Gastroesophageal reflux disease", "Peptic ulcer disease",
+  "Irritable bowel syndrome", "Inflammatory bowel disease", "Crohn disease",
+  "Ulcerative colitis", "Cirrhosis", "Hepatitis C", "Hypothyroidism",
+  "Hyperthyroidism", "Osteoporosis", "Osteoarthritis", "Rheumatoid arthritis",
+  "Gout", "Migraine", "Epilepsy", "Parkinson disease", "Alzheimer disease",
+  "Major depressive disorder", "Generalized anxiety disorder",
+  "Bipolar disorder", "Schizophrenia", "Anemia", "Iron deficiency anemia",
+  "Vitamin D deficiency", "Obesity", "Chronic pain", "Low back pain",
+  "Deep vein thrombosis", "Pulmonary embolism", "Cerebrovascular accident",
+  "Transient ischemic attack", "Benign prostatic hyperplasia",
+  "Chronic sinusitis", "Allergic rhinitis",
+];
+
+function fallbackConditions(q: string): CondResult[] {
+  const w = q.toLowerCase();
+  return CONDITIONS_FALLBACK.filter((c) => c.toLowerCase().includes(w))
+    .slice(0, 5)
+    .map((name) => ({ name }));
+}
+
 export const QuickLookup = forwardRef<QuickLookupHandle>(function QuickLookup(_props, ref) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
