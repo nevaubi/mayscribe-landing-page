@@ -1,92 +1,66 @@
-## Goal
+# Format Tab Expansion — Plan
 
-Stop random dictated words from being flagged as misspelled medications. Replace the current boolean fuzzy match in `verify.ts` with an evidence-scored matcher that requires exact hit OR (phonetic + edit-distance similarity + clinical context evidence). No UI changes — the Review Panel simply holds fewer spans.
+Goal: expand the Review popup's Format tab from 3 toggles to 5, add an LLM-backed formatter guarded by a protected-token integrity check, and add a before/after preview with Apply/Undo. The underlying SOAP textarea stays plain text — bold/headers/bullets only render in the preview.
 
-## New files
+## 1. `src/components/demo/format-options.ts` (deterministic layer)
 
-### `src/components/demo/commonWords.ts`
-Exports `COMMON_WORDS: Set<string>` (~3,000 lowercase common English words). Purpose: short-circuit fuzzy matching on ordinary words like "coring", "cozy", "start", "as", "the", "precaution", "morning", "patient".
+Keep the three current toggles (Punctuation, Units & Abbrev, Sentence Case). Add:
 
-### `src/components/demo/metaphone.ts`
-Compact Double Metaphone. Exports `metaphonePrimary(word: string): string`. Primary code only (no secondary); handles the anglicized cases needed for drug names (silent K, GN, PH→F, X→KS, TH, vowel drop, doubles). Deterministic, ~120 lines.
+- **`abbrevPlus`** ("Abbreviations+"): extend the existing `ABBREVIATIONS` map to ~250 entries — labs (Na, K, Cl, HCO3, BUN, Cr, WBC, Hgb, Hct, Plt, INR, PTT, AST, ALT, ALP, TSH, HbA1c, LDL, HDL, TG, CRP, ESR, BNP, Trop, etc.), vitals (BP, HR, RR, SpO2, Temp, BMI), routes (PO, IV, IM, SC, SL, PR, IN, TOP, OS/OD/OU), frequencies (QD, BID, TID, QID, QHS, PRN, Q4H, Q6H, Q8H, Q12H, QAC, QPC), and clinical shorthand (SOB, CP, N/V, HA, LOC, ROS, PMH, PSH, FHx, SHx, HPI, A/P, s/p, w/, w/o, c/o, r/o, y/o, pt, hx). Applied case-insensitive **word-boundary only** to prevent mid-word rewrites.
+- **`paragraphs`** ("Paragraphs"): if sentence count > 3, split into paragraphs (blank line separator) at topic-shift cue words appearing at sentence start: `Then`, `Plan`, `Assessment`, `On exam`, `Labs`, `Imaging`. Conservative — only break when the cue starts a sentence.
 
-### `src/components/demo/medMatcher.ts`
-Exports:
-```ts
-type MedMatch = { med: MedEntry; matchType: "exact"|"fuzzy"; score: number };
-export function matchMedication(
-  token: string,
-  contextWindow: string,   // 40-char window of raw text around token
-  wordConfidence: number,
-): MedMatch | null;
-```
+Export `applyDeterministicFormat(text, toggles)` returning plain text.
 
-Algorithm:
-1. **Exact pass** (case-insensitive) against every `MedEntry.name` + every alias → return `{ matchType: "exact", score: Infinity }`. No context requirement.
-2. **Gates for fuzzy**:
-   - `wordConfidence < 0.90`
-   - token not in `COMMON_WORDS`
-   - token not recognized as condition / abbreviation / unit / lab / route / frequency (import from `clinical-knowledge.ts` + `lexicon.ts` route/freq lists)
-   - token length ≥ 4 (tokens <5 chars: exact only per rules)
-3. **Candidate filter** for each lexicon name/alias:
-   - same first letter (case-insensitive)
-   - `|len(token) − len(candidate)| ≤ 2`
-   - `metaphonePrimary(token) === metaphonePrimary(candidate)`
-   - length-scaled edit distance (Levenshtein):
-     - 5–7 chars → max 1 edit
-     - ≥8 chars → max 2 edits
-4. **Context score** over the 40-char window (lowercased):
-   - `+3` regex `\d+(?:\.\d+)?\s*(mg|mcg|g|ml|units?|iu|meq|mmol|%)` (dose+unit)
-   - `+2` prescribing verb: start, increase, decrease, continue, hold, discontinue, switch, titrate, taper, resume, initiate, stop, adjust
-   - `+1` any route token from `MedEntry.routes` universe (PO, IV, IM, SC, SL, PR, topical, inhaled, nebulized)
-   - `+1` any frequency token (daily, BID, TID, QID, QHS, PRN, q4h, q6h, q8h, q12h, once, twice)
-5. **Acceptance**: fuzzy candidate accepted only if `contextScore >= 3`. Best remaining candidate (lowest edit distance, ties broken by alias-vs-name preferring name) wins.
-6. **Dev logging**: rejected fuzzy candidates logged via `if (import.meta.env.DEV) console.debug(...)` with `{token, candidate, editDistance, contextScore, reason}`.
+## 2. `src/lib/format-assist.functions.ts` (LLM layer)
 
-### Self-test block
-Dev-only IIFE guarded by `import.meta.env.DEV`, runs once at module load:
-```ts
-// 1. "coring" (0.95 conf) in "coring the sample"    → null
-// 2. "asa"    (0.95)      in "as a precaution"      → null (exact ASA aliases removed from confusing contexts; token "asa" alone not present so this is naturally null)
-// 3. "coreg"  (0.98)      in "start coreg 12.5 mg BID" → exact Carvedilol
-// 4. "korvedilol" (0.55)  in "start korvedilol twelve point five milligrams" → fuzzy Carvedilol
-// 5. "cozy"   (0.9)       in "the patient is cozy"  → null
-// 6. "lisinopril" (0.99)  anywhere                  → exact
-// 7. "metfromin" (0.6)    in "continue metfromin 500 mg BID" → fuzzy Metformin
-// 8. "start"  (0.99)      in "start lisinopril"     → null (common word)
-// 9. "morning" (0.9)      in "in the morning"       → null
-// 10."atorvastatin" (0.4) in "she takes atorvastatin nightly" → exact (confidence irrelevant for exact)
-```
-Assertions logged via `console.assert`; no runtime impact in prod.
+New `createServerFn({ method: "POST" })` mirroring `dictation-assist.functions.ts`:
+- Input (Zod): `{ text: string, toggles: { spelling: boolean; structure: boolean } }`
+- Provider: `createLovableAiGatewayProvider`, model `google/gemini-3.1-flash-lite`, `temperature: 0`, `response_format: { type: "json_object" }`, 3s `AbortSignal.timeout(3000)`.
+- System prompt (verbatim from spec): "You reformat clinical note text. Fix spelling of ordinary English words. You may reorganize into paragraphs, hyphen bullet lists when the text enumerates items, and UPPERCASE header lines for clear subsections, and you may wrap genuinely critical values in **double asterisks**. You must preserve every number, unit, medication name, dose, negation word, and laterality term exactly as given. Never add, remove, or reword clinical content. Return JSON { formatted: string }."
+- User content composed from toggles: only ask for spelling fixes if `spelling`; allow restructuring if `structure`.
+- Returns `{ formatted: string | null }`; null on timeout/error (caller falls back).
 
-## Edited file
+## 3. Integrity check — `src/components/demo/formatIntegrity.ts`
 
-### `src/components/demo/verify.ts`
-- Replace current med detection (currently comes from `detectAll` in lexicon which does substring matching) with a token-walk:
-  1. Tokenize `formattedText` preserving offsets (word regex `/[A-Za-z][A-Za-z-]*/g`).
-  2. For each token, compute 40-char context window (`text.slice(max(0,start-20), min(len, end+20))`), grab word confidence via existing `minConfidenceIn` helper against `words` array.
-  3. Call `matchMedication(token, ctx, conf)`.
-  4. If it returns a match, record `{med, matchType, start, end, contextScore}`.
-- Dose pairing / LASA / range-check logic unchanged, but only applied to `exact | fuzzy | rxterms` matches.
-- **RxTerms fallback (context score ≥ 5, no lexicon match)**: also computed during token walk. When context score ≥ 5 and both exact and fuzzy returned null AND token not in commonWords / clinical-knowledge, push into a `pendingRxTermsMedChecks` array returned by `verify()`. The caller (`EmrDashboard.tsx`) runs these through `searchRxTerms(token, signal)` with a 400ms AbortController; if a returned name starts with the token or has edit distance ≤ 2, treat as med with `matchType: "rxterms"` and run the existing async STRENGTHS_AND_FORMS check via `getStrengthsAndForms`. If RxTerms is empty, drop — no hold.
-- **Hold policy**: gate the current med/dose/LASA hold branches on `matchType ∈ {exact, fuzzy, rxterms}`. Everything else can't produce a med hold.
-- Wrap any residual `console.log` / `console.warn` used for debug inside `if (import.meta.env.DEV)`.
+`extractProtectedTokens(text)` builds a sorted multiset of:
+- Numbers with adjacent units (regex: `\d+(?:\.\d+)?\s*(mg|mcg|g|kg|mL|L|units?|%|mmHg|bpm|mEq|IU|hours?|hrs?|min|days?|weeks?|months?|years?)` and bare numbers).
+- Medication names — reuse `lexicon.ts` exact-name/alias pass and `medMatcher` exact hits.
+- Negations: `no`, `not`, `without`, `denies`, `denied`, `negative`, `absent`, `none`, `never`.
+- Laterality: `left`, `right`, `bilateral`, `bilaterally`, `unilateral`.
 
-### `src/components/demo/EmrDashboard.tsx`
-- Extend the existing async verification pass (already runs `pendingRangeChecks`) to also process the new `pendingRxTermsMedChecks`. Same add-only merge rule: async pass can add holds, never clear deterministic ones. 400ms AbortController shared with existing budget.
+`verifyIntegrity(input, output)` returns boolean by comparing sorted multisets (case-insensitive for meds/negation/laterality; exact numeric string for numbers).
 
-## Files NOT touched
+If mismatch: discard LLM output, apply deterministic-only, and surface inline note "Structure formatting unavailable for this pass." in the Format tab (no toast).
 
-- `lexicon.ts` (data unchanged)
-- `clinical-knowledge.ts` (read-only import of its exported sets)
-- `lookupClient.ts` (already exposes the RxTerms client)
-- `useDictation.ts`, `DictationStrip.tsx`, `ReviewTray.tsx`, `QuickLookup.tsx`, styles, routes
+## 4. `ReviewTray.tsx` Format tab UX
 
-## Expected behavior after change
+Replace current Format tab body with:
+- **Toggle chip row**: Punctuation · Sentence Case · Abbreviations+ · Paragraphs · Spelling · Structure. Chips styled like existing filter chips; Spelling/Structure marked with a small AI dot.
+- **Active section indicator**: shows which SOAP section (Subjective/Objective/Assessment/Plan) is currently active.
+- **"Format section"** primary button: runs pipeline on active section (deterministic first, then LLM if Spelling or Structure on, then integrity check).
+- **Before/After preview**: two stacked panes with subtle bg tint on changed lines (word-level diff via simple LCS or line-diff). Preview renders `**bold**` as real `<strong>`, `# HEADER` lines as uppercase bold headers, `- ` lines as bulleted list — preview only.
+- **Apply / Cancel / Undo**:
+  - Apply → strips `**`, converts headers to plain UPPERCASE lines, bullets remain `- `, paragraphs remain blank-line separated → splices plain text into the active SOAP textarea. Stores prior text in `undoRef`.
+  - Cancel → dismisses preview, no change.
+  - Undo button remains visible in Format tab until next dictation commit or a manual textarea edit invalidates it.
+- **Inline warning slot**: shows "Structure formatting unavailable for this pass." when integrity check fails.
 
-- "coring the sample" → no hold (common-ish word + no context evidence + fails phonetic to Coreg's `KRK`).
-- "as a precaution" → no hold ("as" and "a" are common words; "precaution" isn't an alias).
-- "the patient is cozy" → no hold ("cozy" is common + no dose/verb context; Cozaar primary metaphone differs).
-- "start coreg 12.5 mg BID" → exact hit on alias "coreg" → Carvedilol, range check runs.
-- "start korvedilol twelve point five milligrams" (low conf) → fuzzy hit: `KRVTL` vs `KRVTL` primary metaphone tie, edit distance 2, context score 5 (verb+dose+unit) → Carvedilol.
-- Truly novel meds not in lexicon (e.g. new brand names) still catchable via RxTerms fallback when clearly prescribed.
+## 5. Wiring in `EmrDashboard.tsx`
+
+- Pass active-section id + section text getter/setter to `ReviewTray`.
+- On dictation commit or manual textarea `onChange`, clear `undoRef` for that section.
+- No changes to dictation, verification, or existing textarea rendering — textarea remains plain text, no markdown ever written.
+
+## Files touched
+
+- `src/components/demo/format-options.ts` — extended
+- `src/components/demo/formatIntegrity.ts` — new
+- `src/lib/format-assist.functions.ts` — new
+- `src/components/demo/ReviewTray.tsx` — Format tab rewrite
+- `src/components/demo/EmrDashboard.tsx` — pass active-section props, undo invalidation
+
+## Non-goals
+
+- No change to dictation, verify.ts, medMatcher, or Quick Lookup.
+- No markdown persistence in the note.
+- No toasts; only inline messaging in the Format tab.
