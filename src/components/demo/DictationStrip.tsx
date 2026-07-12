@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { DictationStatus } from "./useDictation";
 
@@ -6,26 +7,43 @@ interface Props {
   status: DictationStatus;
   audioLevel: number;
   interim: string;
+  section: string;
   startedAt: number | null;
   errorMessage: string | null;
   expired: boolean;
+  lastCommit: string | null;
   onStop: () => void;
 }
 
-const BAR_COUNT = 20;
+const BAR_COUNT = 14;
+const SECTION_LABEL: Record<string, string> = {
+  subjective: "S — Subjective",
+  objective: "O — Objective",
+  assessment: "A — Assessment",
+  plan: "P — Plan",
+};
 
 export function DictationStrip({
   status,
   audioLevel,
   interim,
+  section,
   startedAt,
   errorMessage,
   expired,
+  lastCommit,
   onStop,
 }: Props) {
   const visible = status !== "idle";
+  const [portalReady, setPortalReady] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [elapsed, setElapsed] = useState("00:00");
+  const [flashCommit, setFlashCommit] = useState<string | null>(null);
+  const commitTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setPortalReady(typeof document !== "undefined");
+  }, []);
 
   useEffect(() => {
     if (visible) {
@@ -34,6 +52,16 @@ export function DictationStrip({
     }
     setMounted(false);
   }, [visible]);
+
+  useEffect(() => {
+    if (!lastCommit) return;
+    setFlashCommit(lastCommit);
+    if (commitTimerRef.current) window.clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = window.setTimeout(() => setFlashCommit(null), 700);
+    return () => {
+      if (commitTimerRef.current) window.clearTimeout(commitTimerRef.current);
+    };
+  }, [lastCommit]);
 
   useEffect(() => {
     if (!startedAt || status !== "listening") {
@@ -51,65 +79,94 @@ export function DictationStrip({
     return () => clearInterval(id);
   }, [startedAt, status]);
 
-  if (!visible) return null;
+  if (!portalReady || !visible) return null;
 
   const showError = status === "error";
+  const dotColor = showError
+    ? "#EF4444"
+    : status === "connecting"
+      ? "#F59E0B"
+      : "#10B981";
   const label = showError
     ? expired
       ? "Session expired"
-      : "Dictation error"
+      : "Error"
     : status === "connecting"
       ? "Connecting"
       : "Listening";
 
-  const pillClass = showError
-    ? "bg-red-50 text-red-700 border border-red-200"
-    : status === "connecting"
-      ? "bg-amber-50 text-amber-700 border border-amber-200 animate-pulse"
-      : "bg-emerald-50 text-emerald-700 border border-emerald-200";
+  const previewText = flashCommit ?? interim;
 
-  return (
+  const node = (
     <div
-      className="pointer-events-none absolute left-1/2 bottom-4 z-40 -translate-x-1/2"
+      className="fixed left-1/2 bottom-6 -translate-x-1/2 pointer-events-none"
       style={{
+        zIndex: 9999,
         fontFamily: "'Inter', sans-serif",
         opacity: mounted ? 1 : 0,
-        transform: `translate(-50%, ${mounted ? "0" : "4px"})`,
-        transition: "opacity 150ms ease, transform 150ms ease",
+        transform: `translate(-50%, ${mounted ? "0" : "6px"})`,
+        transition: "opacity 180ms ease, transform 180ms ease",
       }}
     >
       <div
-        className="pointer-events-auto flex items-center gap-3 rounded-xl border bg-white px-3 py-2 shadow-[0_16px_36px_-12px_rgba(5,18,56,0.14)]"
-        style={{ borderColor: "#C9D6EC", minWidth: 520, maxWidth: 720 }}
+        className="pointer-events-auto flex items-center gap-3 rounded-xl border bg-white/95 px-3.5 py-2.5"
+        style={{
+          borderColor: "#E6EEF8",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          boxShadow:
+            "0 20px 48px -16px rgba(5,18,56,0.20), 0 4px 12px -4px rgba(5,18,56,0.10)",
+          minWidth: 560,
+          maxWidth: 780,
+        }}
       >
-        {/* Mark */}
-        <div className="flex items-center gap-1.5">
-          <div
-            className="h-5 w-5 rounded-md"
-            style={{
-              background: "linear-gradient(90deg,#0B5DFF 0%,#0FD1D6 100%)",
-            }}
-          />
+        {/* Status dot */}
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            {status === "listening" && (
+              <span
+                className="absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping"
+                style={{ background: dotColor }}
+              />
+            )}
+            <span
+              className="relative inline-flex rounded-full h-2 w-2"
+              style={{ background: dotColor }}
+            />
+          </span>
           <span
-            className="text-[12px] font-bold"
-            style={{ color: "#061338", letterSpacing: "-0.01em" }}
+            className="text-[11px] font-semibold"
+            style={{ color: showError ? "#B42318" : "#061338" }}
           >
-            MayScribe
+            {label}
           </span>
         </div>
 
-        {/* Status pill */}
+        {/* Timer */}
         <span
-          className={`text-[10px] font-semibold uppercase tracking-wider rounded-full px-2 py-0.5 ${pillClass}`}
+          className="text-[11px] font-mono tabular-nums"
+          style={{ color: "#7A8AAC" }}
         >
-          {label}
+          {elapsed}
+        </span>
+
+        {/* Section chip */}
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wider rounded-md px-1.5 py-0.5"
+          style={{
+            background: "#EEF6FF",
+            color: "#0D57FA",
+            border: "1px solid #D8E7FF",
+          }}
+        >
+          {SECTION_LABEL[section] ?? section}
         </span>
 
         {/* Waveform */}
-        <div className="flex items-center gap-[3px] h-6 px-1">
+        <div className="flex items-center gap-[3px] h-5 px-1">
           {Array.from({ length: BAR_COUNT }).map((_, i) => {
-            const phase = 0.6 + 0.4 * Math.sin((i / BAR_COUNT) * Math.PI);
-            const h = Math.max(3, Math.min(24, audioLevel * 55 * phase + 3));
+            const phase = 0.55 + 0.45 * Math.sin((i / BAR_COUNT) * Math.PI);
+            const h = Math.max(2, Math.min(20, audioLevel * 44 * phase + 2));
             return (
               <div
                 key={i}
@@ -119,52 +176,56 @@ export function DictationStrip({
                   borderRadius: 2,
                   background:
                     "linear-gradient(180deg,#0B5DFF 0%,#0FD1D6 100%)",
-                  opacity: status === "listening" ? 1 : 0.4,
-                  transition: "height 80ms linear",
+                  opacity: status === "listening" ? 1 : 0.35,
                 }}
               />
             );
           })}
         </div>
 
-        {/* Elapsed */}
-        <span
-          className="text-[11px] font-mono tabular-nums"
-          style={{ color: "#46587E" }}
-        >
-          {elapsed}
-        </span>
-
-        {/* Interim / error text — show tail so newest words are visible */}
+        {/* Preview */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <div
-            className="text-[12px] italic text-left whitespace-nowrap overflow-hidden text-ellipsis"
+            className="text-[12px] whitespace-nowrap overflow-hidden text-ellipsis text-right rounded px-1.5 py-0.5 transition-colors"
             style={{
-              color: showError ? "#B42318" : "#7A8AAC",
+              color: showError
+                ? "#B42318"
+                : flashCommit
+                  ? "#061338"
+                  : "#7A8AAC",
+              fontStyle: flashCommit ? "normal" : "italic",
+              background: flashCommit ? "#EEF4FC" : "transparent",
+              fontFamily: "'JetBrains Mono', monospace",
             }}
-            title={showError ? (errorMessage ?? "") : interim}
+            title={showError ? (errorMessage ?? "") : previewText}
           >
             {showError
               ? expired
                 ? "press F2 to resume"
                 : (errorMessage ?? "")
-              : interim
-                ? (interim.length > 90 ? "…" + interim.slice(-90) : interim)
-                : (status === "listening" ? "…" : "")}
+              : previewText
+                ? previewText.length > 96
+                  ? "…" + previewText.slice(-96)
+                  : previewText
+                : status === "listening"
+                  ? "…"
+                  : ""}
           </div>
         </div>
 
         {/* Stop */}
         <button
           onClick={onStop}
-          className="ml-1 h-6 w-6 rounded-md border flex items-center justify-center hover:bg-slate-50 transition-colors"
+          className="h-6 w-6 rounded-md border flex items-center justify-center hover:bg-slate-50 transition-colors"
           style={{ borderColor: "#D8E2F0", color: "#46587E" }}
-          aria-label="Stop dictation"
-          title="Stop"
+          aria-label="Stop dictation (F2)"
+          title="Stop (F2)"
         >
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
   );
+
+  return createPortal(node, document.body);
 }
