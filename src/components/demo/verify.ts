@@ -1,5 +1,7 @@
 import type { DGWord } from "./useDictation";
-import { detectAll, findMed, findLASA, MEDS } from "./lexicon";
+import { detectAll, findLASA, MEDS, type MedEntry } from "./lexicon";
+import { matchMedication, contextScoreFor } from "./medMatcher";
+import { COMMON_WORDS } from "./commonWords";
 
 export type SpanStatus = "commit" | "hold";
 export type SpanType =
@@ -33,21 +35,31 @@ export interface PendingRangeCheck {
   doseText: string;
 }
 
+/**
+ * Token that had strong prescribing context (score>=5) but did not match the
+ * lexicon exactly or fuzzily. Caller resolves via RxTerms; if RxTerms returns
+ * a close match, upgrade to a medication with matchType "rxterms" and run the
+ * strengths check. If RxTerms returns nothing, this token is NOT a medication
+ * and must not hold.
+ */
+export interface PendingRxTermsMedCheck {
+  token: string;
+  start: number;
+  end: number;
+  contextScore: number;
+  nearestDose?: { value: number; unit: string; start: number; end: number; text: string };
+}
+
 export interface VerifyResult {
   spans: Span[];
   committedText: string; // string with underscore placeholders for holds
   pendingRangeChecks: PendingRangeCheck[];
+  pendingRxTermsMedChecks: PendingRxTermsMedCheck[];
 }
 
 const HOLD_CONF_THRESHOLD = 0.86;
 
-function minConfidenceIn(
-  words: DGWord[],
-  spanText: string,
-): number {
-  // Words come from Deepgram with word-level confidence but no char offsets
-  // into formatted text. Do a simple token match: for each token in the span,
-  // find the word with matching text and take min confidence.
+function minConfidenceIn(words: DGWord[], spanText: string): number {
   if (!words.length) return 1;
   const tokens = spanText.toLowerCase().split(/\s+/).filter(Boolean);
   let min = 1;
@@ -56,8 +68,9 @@ function minConfidenceIn(
     if (!stripped) continue;
     const w = words.find(
       (x) =>
-        (x.punctuated_word || x.word || "").toLowerCase().replace(/[^a-z0-9.]/gi, "") ===
-        stripped,
+        (x.punctuated_word || x.word || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9.]/gi, "") === stripped,
     );
     if (w && typeof w.confidence === "number") {
       if (w.confidence < min) min = w.confidence;
@@ -72,35 +85,88 @@ function nextId() {
   return `s${Date.now().toString(36)}${idCounter}`;
 }
 
-export function verify(
-  formattedText: string,
-  words: DGWord[],
-): VerifyResult {
+interface MedHit {
+  entry: MedEntry;
+  matchType: "exact" | "fuzzy";
+  start: number;
+  end: number;
+  text: string;
+  contextScore: number;
+  editDistance: number;
+  minConf: number;
+}
+
+const WORD_RE = /[A-Za-z][A-Za-z-]{1,}/g;
+
+function windowAround(text: string, start: number, end: number, radius = 20): string {
+  return text.slice(Math.max(0, start - radius), Math.min(text.length, end + radius));
+}
+
+export function verify(formattedText: string, words: DGWord[]): VerifyResult {
   const detected = detectAll(formattedText);
   const spans: Span[] = [];
   const pendingRangeChecks: PendingRangeCheck[] = [];
+  const pendingRxTermsMedChecks: PendingRxTermsMedCheck[] = [];
 
-  // Med + dose HOLD logic: iterate detected in order, pair med with next dose within 40 chars.
-  for (let i = 0; i < detected.length; i++) {
-    const d = detected[i];
-    if (d.type !== "med") continue;
-    const medEntry = findMed(d.text);
-    if (!medEntry) continue;
+  // ─── Med detection via evidence-scored matcher ────────────────────
+  const medHits: MedHit[] = [];
+  const claimed: Array<[number, number]> = [];
+  const overlaps = (s: number, e: number) =>
+    claimed.some(([cs, ce]) => s < ce && e > cs);
 
-    // LASA check
-    const lasa = findLASA(d.text);
+  for (let m: RegExpExecArray | null; (m = WORD_RE.exec(formattedText)); ) {
+    const tok = m[0];
+    const start = m.index;
+    const end = start + tok.length;
+    if (overlaps(start, end)) continue;
+    const conf = minConfidenceIn(words, tok);
+    const ctx = windowAround(formattedText, start, end);
+    const match = matchMedication(tok, ctx, conf);
+    if (match) {
+      medHits.push({
+        entry: match.med,
+        matchType: match.matchType === "rxterms" ? "fuzzy" : match.matchType,
+        start,
+        end,
+        text: tok,
+        contextScore: match.contextScore,
+        editDistance: match.editDistance,
+        minConf: conf,
+      });
+      claimed.push([start, end]);
+      continue;
+    }
+    // No lexicon match — check RxTerms fallback candidacy.
+    if (conf >= 0.9) continue; // high-confidence non-med, skip
+    if (tok.length < 5) continue;
+    const lower = tok.toLowerCase();
+    if (COMMON_WORDS.has(lower)) continue;
+    const ctxScore = contextScoreFor(ctx);
+    if (ctxScore < 5) continue;
+    pendingRxTermsMedChecks.push({
+      token: tok,
+      start,
+      end,
+      contextScore: ctxScore,
+    });
+  }
 
-    // find nearest dose after this med within 40 chars
+  // ─── Med + dose hold logic ────────────────────────────────────────
+  for (const hit of medHits) {
+    const medEntry = hit.entry;
+    // LASA check (exact + fuzzy only, per hold policy)
+    const lasa = findLASA(hit.text);
+
+    // nearest dose within 40 chars after
     let nearestDose: (typeof detected)[number] | undefined;
-    for (let j = i + 1; j < detected.length; j++) {
-      if (detected[j].start - d.end > 40) break;
-      if (detected[j].type === "dose") {
-        nearestDose = detected[j];
-        break;
-      }
+    for (const d of detected) {
+      if (d.type !== "dose") continue;
+      if (d.start < hit.end) continue;
+      if (d.start - hit.end > 40) break;
+      nearestDose = d;
+      break;
     }
 
-    const conf = minConfidenceIn(words, d.text);
     let status: SpanStatus = "commit";
     let reason: string | undefined;
     let type: SpanType = "med";
@@ -132,9 +198,8 @@ export function verify(
           ];
         }
       } else if (typeof val === "number" && unit) {
-        // No curated range — defer to async RxTerms STRENGTHS_AND_FORMS check.
         pendingRangeChecks.push({
-          spanId: "", // filled below
+          spanId: "",
           medName: medEntry.name,
           dose: val,
           unit,
@@ -145,26 +210,25 @@ export function verify(
       }
     }
 
-    if (status === "commit" && conf < HOLD_CONF_THRESHOLD) {
+    if (status === "commit" && hit.minConf < HOLD_CONF_THRESHOLD) {
       status = "hold";
       type = "low_confidence";
       reason = "Low confidence";
-      candidates = [d.text, "(dismiss)"];
+      candidates = [hit.text, "(dismiss)"];
     }
 
     const span: Span = {
       id: nextId(),
-      text: d.text,
-      start: d.start,
-      end: d.end,
+      text: hit.text,
+      start: hit.start,
+      end: hit.end,
       type,
       status,
       candidates,
       reason,
-      minConfidence: conf,
+      minConfidence: hit.minConf,
     };
     spans.push(span);
-    // Attach spanId to the last pushed pending check (this med's dose).
     if (
       pendingRangeChecks.length &&
       pendingRangeChecks[pendingRangeChecks.length - 1].spanId === "" &&
@@ -174,12 +238,10 @@ export function verify(
     }
   }
 
-  // Also flag low-confidence dose spans not attached to a med
+  // ─── Low-confidence orphan dose spans ─────────────────────────────
   for (const d of detected) {
     if (d.type !== "dose") continue;
-    const already = spans.some(
-      (s) => s.start <= d.start && s.end >= d.end,
-    );
+    const already = spans.some((s) => s.start <= d.start && s.end >= d.end);
     if (already) continue;
     const conf = minConfidenceIn(words, d.text);
     if (conf < HOLD_CONF_THRESHOLD) {
@@ -210,20 +272,18 @@ export function verify(
   }
   out += formattedText.slice(cursor);
 
-  return { spans, committedText: out, pendingRangeChecks };
+  return { spans, committedText: out, pendingRangeChecks, pendingRxTermsMedChecks };
 }
 
-export const DEMO_ACTIVE_MEDS = MEDS
-  .filter((m) =>
-    [
-      "Furosemide",
-      "Carvedilol",
-      "Lisinopril",
-      "Spironolactone",
-      "Metformin",
-      "Atorvastatin",
-      "Aspirin",
-      "Insulin glargine",
-    ].includes(m.name),
-  )
-  .map((m) => m.name);
+export const DEMO_ACTIVE_MEDS = MEDS.filter((m) =>
+  [
+    "Furosemide",
+    "Carvedilol",
+    "Lisinopril",
+    "Spironolactone",
+    "Metformin",
+    "Atorvastatin",
+    "Aspirin",
+    "Insulin glargine",
+  ].includes(m.name),
+).map((m) => m.name);
