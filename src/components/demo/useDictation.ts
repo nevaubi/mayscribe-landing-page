@@ -70,17 +70,22 @@ function diffAgainstLedger(transcript: string, ledger: string) {
 }
 
 export function useDictation(opts: UseDictationOptions = {}) {
-  const { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop } = opts;
+  const { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop, onBatchTranscript } = opts;
   const optsRef = useRef({
     onInterim,
     onFinal,
     onUtteranceEnd,
     onError,
     onQuietStop,
+    onBatchTranscript,
   });
-  optsRef.current = { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop };
+  optsRef.current = { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop, onBatchTranscript };
 
   const [status, setStatus] = useState<DictationStatus>("idle");
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [quietMsRemaining, setQuietMsRemaining] = useState<number | null>(null);
+  const [expired, setExpired] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [quietMsRemaining, setQuietMsRemaining] = useState<number | null>(null);
   const [expired, setExpired] = useState(false);
