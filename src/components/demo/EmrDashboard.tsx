@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Mic, MicOff } from "lucide-react";
+import { useDictation } from "./useDictation";
+import { DictationStrip } from "./DictationStrip";
 import {
   Search,
   Bell,
