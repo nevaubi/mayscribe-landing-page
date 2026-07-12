@@ -92,9 +92,9 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const fail = useCallback(
     (sessionId: number, msg: string, isExpired = false) => {
       if (sessionId !== sessionRef.current) return;
+      sessionRef.current += 1;
       stoppingRef.current = true;
       cleanup();
-      sessionRef.current += 1;
       stoppingRef.current = false;
       setErrorMessage(msg);
       setExpired(isExpired);
