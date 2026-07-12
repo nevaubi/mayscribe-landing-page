@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { useSession } from "@tanstack/react-start/server";
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 type GateSession = { unlocked?: boolean };
@@ -23,19 +22,6 @@ function getSessionConfig() {
   };
 }
 
-function getSupabase() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error("Supabase server env not set");
-  return createClient(url, key, {
-    auth: {
-      storage: undefined,
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
-
 const UnlockSchema = z.object({
   passcode: z.string().min(1).max(200),
 });
@@ -43,8 +29,8 @@ const UnlockSchema = z.object({
 export const unlockDemo = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => UnlockSchema.parse(data))
   .handler(async ({ data }) => {
-    const supabase = getSupabase();
-    const { data: ok, error } = await supabase.rpc("verify_demo_passcode", {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: ok, error } = await supabaseAdmin.rpc("verify_demo_passcode", {
       input: data.passcode,
     });
 
@@ -61,6 +47,7 @@ export const unlockDemo = createServerFn({ method: "POST" })
     await session.update({ unlocked: true });
     return { ok: true as const };
   });
+
 
 export const isDemoUnlocked = createServerFn({ method: "GET" }).handler(
   async () => {
