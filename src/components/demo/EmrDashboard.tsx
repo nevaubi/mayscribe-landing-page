@@ -3,8 +3,10 @@ import { Mic, MicOff } from "lucide-react";
 import { useDictation, type DGWord } from "./useDictation";
 import { DictationStrip } from "./DictationStrip";
 import { verify, DEMO_ACTIVE_MEDS, type Span } from "./verify";
-import { TextOverlay } from "./HighlightedTextarea";
+import { TextOverlay, type MedMatch } from "./HighlightedTextarea";
 import { ReviewTray, type HoldEntry } from "./ReviewTray";
+import { QuickLookup, type QuickLookupHandle } from "./QuickLookup";
+import { detectAll } from "./lexicon";
 import { dictationAssist } from "@/lib/dictation-assist.functions";
 import {
   Search,
@@ -255,6 +257,32 @@ export function EmrDashboard() {
   const anchorsRef = useRef(anchors);
   anchorsRef.current = anchors;
   const prevSoapRef = useRef<Record<SoapSection, string>>(soap);
+  const quickLookupRef = useRef<QuickLookupHandle>(null);
+
+  const handleLookup = useCallback((q: string) => {
+    quickLookupRef.current?.openWith(q);
+  }, []);
+
+  // Compute lexicon med matches per section (memoised)
+  const medMatchesBySection = useMemo(() => {
+    const out: Record<SoapSection, MedMatch[]> = {
+      subjective: [],
+      objective: [],
+      assessment: [],
+      plan: [],
+    };
+    (Object.keys(out) as SoapSection[]).forEach((sec) => {
+      const text = soap[sec];
+      if (!text) return;
+      const detected = detectAll(text).filter((d) => d.type === "med");
+      out[sec] = detected.map((d) => ({
+        start: d.start,
+        end: d.end,
+        medName: (d.meta?.med as string) ?? d.text,
+      }));
+    });
+    return out;
+  }, [soap]);
 
   const syncCaretFromElement = useCallback((el: HTMLTextAreaElement) => {
     const section = el.dataset.soapSection as SoapSection | undefined;
@@ -932,6 +960,8 @@ export function EmrDashboard() {
                               dismissed={sectionDismissed}
                               flashRange={flashForSection}
                               activeHoldId={activeHoldId}
+                              medMatches={medMatchesBySection[section]}
+                              onMedClick={(name) => handleLookup(name)}
                             />
                             <textarea
                               ref={(el) => { textareaRefs.current[section] = el; }}
@@ -999,6 +1029,7 @@ export function EmrDashboard() {
                         onSelect={(idx) => setActiveHoldIndex(idx)}
                         onConfirm={(id, choice) => confirmHold(id, choice)}
                         onDismiss={(id) => dismissHold(id)}
+                        onLookup={handleLookup}
                       />
                     )}
 
@@ -1036,6 +1067,9 @@ export function EmrDashboard() {
 
                 {/* ── RIGHT PANEL ──────────────────────────────────── */}
                 <aside className="w-64 border-l border-border bg-card flex-shrink-0 overflow-y-auto scrollbar-hide">
+
+                  {/* Quick Lookup */}
+                  <QuickLookup ref={quickLookupRef} />
 
                   {/* Vitals */}
                   <div className="border-b border-border">

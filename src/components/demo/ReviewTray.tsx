@@ -15,6 +15,7 @@ interface Props {
   onSelect: (index: number) => void;
   onConfirm: (anchorId: string, choice: string) => void;
   onDismiss: (anchorId: string) => void;
+  onLookup?: (query: string) => void;
 }
 
 const SECTION_LABELS: Record<HoldEntry["section"], string> = {
@@ -24,7 +25,7 @@ const SECTION_LABELS: Record<HoldEntry["section"], string> = {
   plan: "P",
 };
 
-export function ReviewTray({ holds, activeIndex, onSelect, onConfirm, onDismiss }: Props) {
+export function ReviewTray({ holds, activeIndex, onSelect, onConfirm, onDismiss, onLookup }: Props) {
   if (holds.length === 0) return null;
   return (
     <div
@@ -80,12 +81,23 @@ export function ReviewTray({ holds, activeIndex, onSelect, onConfirm, onDismiss 
                     {c}
                   </button>
                 ))}
+                {h.span.type === "med" && onLookup && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onLookup(h.rawText);
+                    }}
+                    className="text-[11px] px-2 py-0.5 rounded border border-border bg-white text-[#0D57FA] hover:border-[#0D57FA] hover:bg-[#EEF4FC] transition-colors ml-auto"
+                  >
+                    Lookup
+                  </button>
+                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onDismiss(h.anchorId);
                   }}
-                  className="text-[11px] px-2 py-0.5 rounded border border-border bg-white text-muted-foreground hover:border-amber-500 hover:text-amber-700 transition-colors ml-auto"
+                  className={`text-[11px] px-2 py-0.5 rounded border border-border bg-white text-muted-foreground hover:border-amber-500 hover:text-amber-700 transition-colors ${h.span.type === "med" && onLookup ? "" : "ml-auto"}`}
                 >
                   Dismiss
                 </button>
