@@ -7,20 +7,20 @@ import whitepaperAsset from "@/assets/mayscribe-whitepaper.pdf.asset.json";
 const PDF_URL = whitepaperAsset.url;
 
 const DESCRIPTION =
-  "MayScribe's whitepaper on self-hosted clinical dictation: zero audio retention, deterministic verification of doses, units, laterality and negations, and an honest path to HIPAA and SOC attestation.";
+  "Self-hosted clinical dictation with zero audio retention, deterministic verification, and an honest path to HIPAA and SOC attestation.";
 
 export const Route = createFileRoute("/whitepaper")({
   component: WhitepaperPage,
   head: () => ({
     meta: [
-      { title: "Whitepaper — Clinical Dictation Without the Cloud | MayScribe" },
+      { title: "Whitepaper — Clinical Dictation | MayScribe" },
       { name: "description", content: DESCRIPTION },
-      { property: "og:title", content: "Clinical Dictation Without the Cloud — MayScribe Whitepaper" },
+      { property: "og:title", content: "MayScribe Whitepaper — Clinical Dictation" },
       { property: "og:description", content: DESCRIPTION },
       { property: "og:type", content: "article" },
       { property: "og:url", content: "https://mayscribe.com/whitepaper" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Clinical Dictation Without the Cloud — MayScribe Whitepaper" },
+      { name: "twitter:title", content: "MayScribe Whitepaper — Clinical Dictation" },
       { name: "twitter:description", content: DESCRIPTION },
     ],
     links: [{ rel: "canonical", href: "https://mayscribe.com/whitepaper" }],
