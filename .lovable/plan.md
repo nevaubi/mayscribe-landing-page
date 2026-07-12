@@ -1,31 +1,41 @@
 ## Plan
 
-1. **Make dictation truly separate from the mock EMR**
-   - Remove `DictationStrip` from inside the SOAP editor card.
-   - Mount it once at the top/root of `EmrDashboard`, outside the EMR layout tree, relying on its portal so it floats above everything.
-   - Remove the inline `QuickLookup` panel from the EMR right rail as well; convert it to a floating popup/portal that opens only when triggered from Review Tray lookup.
+### 1. Slim, smoother floating dictation strip
+- Reduce width from 760px to ~520px (still `min()` with viewport).
+- Tighten paddings, shrink waveform to ~10 bars, remove the redundant preview text box (interim text will now live in the Review popup instead).
+- Keep only: status dot + label + elapsed, section chip, compact waveform, quiet countdown, close button.
+- Smooth waveform: interpolate `audioLevel` with a small RAF-driven eased value so bars don't jitter; add subtle opacity/height easing.
 
-2. **Replace the current floating recorder UI with a cleaner command-style popup**
-   - Fixed high-z-index panel centered near the bottom/front of the screen.
-   - Clear status, active SOAP section, elapsed time, quiet countdown, waveform, interim text, and last committed text.
-   - No visual integration into textareas, no highlights inside the text field, no EMR layout shifting.
+### 2. Move the full transcript into the Review popup
+- Redesign `ReviewTray` (rename conceptually to "Review Panel", same file) into a two-part popup:
+  - **Top:** full committed + interim transcript rendered as rich text. Words/phrases flagged by `verify()` get inline highlights (amber for holds, blue dotted for meds) directly in this panel only.
+  - **Bottom:** the existing per-hold action cards (candidates, Lookup, Dismiss).
+- Highlights are rendered here from `spans` offsets — no overlay in the EMR textarea.
+- Remove `HighlightedTextarea` mirror-overlay usage from `EmrDashboard`; the SOAP fields become plain textareas again. Keep `HighlightedTextarea` file but stop importing it (or swap to plain `<Textarea>`).
 
-3. **Fix streaming chunk ordering and insertion quality**
-   - Track Deepgram result order using audio timestamps / sequence guards so older interim/final chunks cannot overwrite newer text.
-   - Maintain a per-session committed transcript buffer to avoid duplicate or out-of-order final inserts.
-   - Only commit stable final speech chunks; interim text remains preview-only in the floating popup.
-   - Tighten spacing/punctuation rules so inserted SOAP text reads cleanly.
+### 3. Smarter number/age vs dose classification
+- Update `lexicon.ts` `detectAll` (and dose regex) so a numeric token is only classified as `dose` when:
+  - it's followed by a real dose unit (`mg`, `mcg`, `g`, `mL`, `units`, `IU`, `%`, `mg/kg`, etc.), OR
+  - it's within a short window after a known medication name.
+- Add an `age/quantity` classifier that recognizes patterns like `<n> year[s] old`, `age <n>`, `<n> years`, `<n> days`, `<n> weeks`, `<n> months`, `x<n>`, `<n> times`, `<n> episodes`. These are excluded from med/dose verification entirely (never produce a "not a prescription" style flag).
+- In `verify.ts`, guard: a `low_confidence` hold is only created for numeric spans that are actual doses (unit-bearing or med-adjacent). Standalone numbers get no hold.
 
-4. **Auto-close dictation after 2 seconds of quiet**
-   - Add silence detection based on the live audio level.
-   - If listening and audio stays below a quiet threshold for 2 seconds, stop dictation automatically.
-   - Show a subtle “Quiet — closing…” countdown/state in the floating popup so it feels intentional.
+### 4. Formatting options in the Review popup (non-destructive)
+- Add a small "Formatting" strip at the top of the Review popup with clickable, toggleable chips that reformat the transcript view without changing the raw words:
+  - **Punctuation polish** — sentence casing, terminal periods, comma spacing.
+  - **Numbers & units** — `10mg` → `10 mg`, `bid` → `BID`, `q6h` normalized.
+  - **Section casing** — first letter of each sentence uppercase.
+  - **Original** — revert to raw dictated text.
+- These operate on a display copy only. Committing to the SOAP field happens on Enter/confirm, and the SOAP textarea receives the currently displayed formatted string (still no word substitutions — only whitespace, punctuation, casing).
+- Each chip toggles independently; "Original" clears all toggles.
 
-5. **Keep Review Tray functional but detached**
-   - Review Tray can remain in the editor footer for held verification items.
-   - Medication “Lookup” opens the floating Quick Lookup popup instead of scrolling/focusing an embedded right-rail section.
+### 5. Wiring / cleanup
+- `EmrDashboard`: pass `interim` + full section text + spans into the Review popup; keep textareas plain.
+- `useDictation`: no logic change beyond exposing the same interim string to the Review popup (already available).
+- Ensure the Review popup only mounts when there is either an active dictation session or at least one hold — otherwise stays hidden.
 
-6. **Sanity check**
-   - Search for dangling embedded UI references.
-   - Verify no dictation popup DOM is nested in the mock EMR card visually or structurally.
-   - Verify F2 start/stop, auto-stop, and restart behavior still work.
+### Technical notes
+
+- Files touched: `src/components/demo/DictationStrip.tsx`, `src/components/demo/ReviewTray.tsx`, `src/components/demo/EmrDashboard.tsx`, `src/components/demo/lexicon.ts`, `src/components/demo/verify.ts`. New helper `src/components/demo/format-options.ts` for the reversible formatting toggles.
+- No backend changes; Gemini assist call remains as-is.
+- No changes to `useDictation` streaming logic or auto-quiet-stop.
