@@ -762,6 +762,8 @@ export function EmrDashboard() {
         expired={expired}
         section={dictationTargetRef.current}
         lastCommit={lastCommitText}
+        holdCount={openHolds.length}
+        reviewTrayClosed={!showReview}
         onStop={() => {
           stop();
           setStartedAt(null);
