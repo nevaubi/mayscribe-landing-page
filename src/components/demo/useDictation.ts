@@ -125,6 +125,15 @@ export function useDictation(opts: UseDictationOptions = {}) {
     } catch {}
     streamRef.current = null;
     try {
+      workletNodeRef.current?.port.close();
+      workletNodeRef.current?.disconnect();
+    } catch {}
+    workletNodeRef.current = null;
+    try {
+      sourceNodeRef.current?.disconnect();
+    } catch {}
+    sourceNodeRef.current = null;
+    try {
       analyserRef.current?.disconnect();
     } catch {}
     analyserRef.current = null;
