@@ -485,11 +485,19 @@ for (const m of MEDS) {
 
 export function findMed(word: string): MedEntry | null {
   const w = word.toLowerCase();
+  if (STOPWORDS.has(w)) return null;
+
   for (const t of MED_TOKENS) {
     if (t.token === w) return MEDS.find((m) => m.name === t.canonical) ?? null;
   }
   for (const t of MED_TOKENS) {
-    if (Math.abs(t.token.length - w.length) <= 2 && levenshtein(t.token, w, 2) <= 2) {
+    // Skip very short tokens and stopwords to avoid false positives like
+    // "and" matching "asa" (aspirin) or "with" matching "hctz".
+    if (w.length < 5 || t.token.length < 5) continue;
+    const lenDiff = Math.abs(t.token.length - w.length);
+    if (lenDiff > 2) continue;
+    const maxAllowed = w.length <= 6 || t.token.length <= 6 ? 1 : 2;
+    if (levenshtein(t.token, w, maxAllowed) <= maxAllowed) {
       return MEDS.find((m) => m.name === t.canonical) ?? null;
     }
   }
