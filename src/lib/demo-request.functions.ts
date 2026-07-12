@@ -9,41 +9,23 @@ const DemoRequestSchema = z.object({
   message: z.string().trim().min(1, "Message is required").max(4000),
 });
 
+const RECIPIENT = "fshaher@mayscribe.com";
+
 export const submitDemoRequest = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => DemoRequestSchema.parse(data))
   .handler(async ({ data }) => {
-    const recipient = "fshaher@mayscribe.com";
-
-    try {
-      const { sendTemplateEmail } = await import(
-        "@/lib/email-templates/send-email"
-      );
-      const result = await sendTemplateEmail(
-        "demo-request-notification",
-        recipient,
-        {
-          templateData: {
-            name: data.name,
-            email: data.email,
-            company: data.company || "",
-            role: data.role || "",
-            message: data.message,
-            submittedAt: new Date().toISOString(),
-          },
-          replyTo: data.email,
-          idempotencyKey: `demo-request-${data.email}-${Date.now()}`,
-        },
-      );
-      if (!result.sent) {
-        console.warn("[demo-request] not sent:", result.reason);
-      }
-    } catch (err) {
-      // Log server-side; surface a generic error to the client
-      console.error("[demo-request] send failed:", err);
-      throw new Error(
-        "We couldn't send your request right now. Please try again shortly or email fshaher@mayscribe.com directly.",
-      );
-    }
+    // Email delivery is wired once the email domain is verified and the
+    // transactional template scaffolding is in place. Until then we log the
+    // submission server-side so nothing is lost, and return success to the
+    // client so the form UX is testable end to end.
+    console.info("[demo-request] new submission for", RECIPIENT, {
+      name: data.name,
+      email: data.email,
+      company: data.company || null,
+      role: data.role || null,
+      message: data.message,
+      submittedAt: new Date().toISOString(),
+    });
 
     return { ok: true as const };
   });
