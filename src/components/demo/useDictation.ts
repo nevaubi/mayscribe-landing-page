@@ -158,10 +158,12 @@ export function useDictation(opts: UseDictationOptions = {}) {
       }, 66);
     } catch {}
 
-    // 3) socket
+    // 3) socket — use query-param token auth (browser-friendly)
+    const socketUrl = `${DG_URL}&token=${encodeURIComponent(accessToken)}`;
+    const socketOpenedAt = Date.now();
     let socket: WebSocket;
     try {
-      socket = new WebSocket(DG_URL, ["token", accessToken]);
+      socket = new WebSocket(socketUrl);
     } catch {
       fail("Dictation unavailable — retry");
       return;
