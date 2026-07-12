@@ -91,6 +91,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const finalLedgerRef = useRef("");
   const lastFinalEndRef = useRef(0);
   const quietSinceRef = useRef<number | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   // RAF-batched interim delivery to keep popup smooth.
   const pendingInterimRef = useRef<string | null>(null);
