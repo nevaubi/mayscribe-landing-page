@@ -14,6 +14,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DemoIndexRouteImport } from './routes/demo/index'
 import { Route as DemoUnlockRouteImport } from './routes/demo/unlock'
+import { Route as ApiDeepgramTokenRouteImport } from './routes/api/deepgram-token'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 
 const WhitepaperRoute = WhitepaperRouteImport.update({
@@ -41,6 +42,11 @@ const DemoUnlockRoute = DemoUnlockRouteImport.update({
   path: '/demo/unlock',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDeepgramTokenRoute = ApiDeepgramTokenRouteImport.update({
+  id: '/api/deepgram-token',
+  path: '/api/deepgram-token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LovableEmailTransactionalPreviewRoute =
   LovableEmailTransactionalPreviewRouteImport.update({
     id: '/lovable/email/transactional/preview',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/deepgram-token': typeof ApiDeepgramTokenRoute
   '/demo/unlock': typeof DemoUnlockRoute
   '/demo/': typeof DemoIndexRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/deepgram-token': typeof ApiDeepgramTokenRoute
   '/demo/unlock': typeof DemoUnlockRoute
   '/demo': typeof DemoIndexRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/deepgram-token': typeof ApiDeepgramTokenRoute
   '/demo/unlock': typeof DemoUnlockRoute
   '/demo/': typeof DemoIndexRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/'
     | '/sitemap.xml'
     | '/whitepaper'
+    | '/api/deepgram-token'
     | '/demo/unlock'
     | '/demo/'
     | '/lovable/email/transactional/preview'
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/'
     | '/sitemap.xml'
     | '/whitepaper'
+    | '/api/deepgram-token'
     | '/demo/unlock'
     | '/demo'
     | '/lovable/email/transactional/preview'
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/sitemap.xml'
     | '/whitepaper'
+    | '/api/deepgram-token'
     | '/demo/unlock'
     | '/demo/'
     | '/lovable/email/transactional/preview'
@@ -104,6 +116,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   WhitepaperRoute: typeof WhitepaperRoute
+  ApiDeepgramTokenRoute: typeof ApiDeepgramTokenRoute
   DemoUnlockRoute: typeof DemoUnlockRoute
   DemoIndexRoute: typeof DemoIndexRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
@@ -146,6 +159,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoUnlockRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/deepgram-token': {
+      id: '/api/deepgram-token'
+      path: '/api/deepgram-token'
+      fullPath: '/api/deepgram-token'
+      preLoaderRoute: typeof ApiDeepgramTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lovable/email/transactional/preview': {
       id: '/lovable/email/transactional/preview'
       path: '/lovable/email/transactional/preview'
@@ -160,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   WhitepaperRoute: WhitepaperRoute,
+  ApiDeepgramTokenRoute: ApiDeepgramTokenRoute,
   DemoUnlockRoute: DemoUnlockRoute,
   DemoIndexRoute: DemoIndexRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
