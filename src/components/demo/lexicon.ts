@@ -442,8 +442,8 @@ function levenshtein(a: string, b: string, cap = 3): number {
   return dp[b.length];
 }
 
-// Common English words and clinical narrative terms that should never be
-// treated as medication names, even with fuzzy matching.
+// Common English words, clinical narrative terms, and disease names that should
+// never be treated as medication names, even with fuzzy matching.
 const STOPWORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "been", "being", "but", "by",
   "do", "does", "did", "for", "from", "had", "has", "have", "he", "her", "him",
@@ -475,6 +475,57 @@ const STOPWORDS = new Set([
   "inactive", "alert", "oriented", "cooperative", "pleasant", "difficult",
   "ambulatory", "bedridden", "intact", "deny", "denies", "none", "no",
   "deny", "denied",
+  // Common disease / condition names (not medications)
+  "diabetes", "diabetic", "hypertension", "hypertensive", "hyperlipidemia",
+  "hypothyroidism", "hyperthyroidism", "hypothyroid", "hyperthyroid",
+  "asthma", "copd", "emphysema", "bronchitis", "pneumonia", "pneumonitis",
+  "failure", "heart", "cardiac", "renal", "kidney", "hepatic", "liver",
+  "anemia", "depression", "anxiety", "insomnia", "obesity", "morbid",
+  "gerd", "reflux", "dyspepsia", "gastritis", "ulcer", "ulcers", "ibs",
+  "migraine", "migraines", "headache", "headaches", "seizure", "seizures",
+  "epilepsy", "stroke", "tia", "neuropathy", "fibromyalgia", "arthritis",
+  "osteoporosis", "osteopenia", "gout", "ckd", "aki", "esrd", "cad",
+  "pad", "pvd", "dvt", "pe", "afib", "aflutter", "chf", "hfref", "hfpef",
+  "mi", "mi", "niddm", "iddm", "t1dm", "t2dm", "dm", "dm2", "dm1",
+  "copd", "pad", "cabg", "pci", "stent", "stents", "angina", "ischemia",
+  "infection", "infections", "uti", "cellulitis", "pneumonia", "sepsis",
+  "septic", "shock", "hypotension", "hypotensive", "dyslipidemia",
+  "glaucoma", "cataract", "cataracts", "macular", "degeneration",
+  "eczema", "psoriasis", "dermatitis", "acne", "rosacea", "allergies",
+  "rhinitis", "sinusitis", "bronchiectasis", "cf", "cirrhosis", "hepatitis",
+  "pancreatitis", "cholecystitis", "diverticulitis", "appendicitis",
+  "colitis", "crohn", "crohns", "uc", "ibs", "ibd", "sibo", "gastroparesis",
+  "neuropathy", "myopathy", "myalgia", "arthralgia", "neuralgia",
+  "dementia", "delirium", "psychosis", "bipolar", "schizophrenia",
+  "adhd", "add", "autism", "ocd", "ptsd", "panic", "phobia", "phobias",
+  "dependence", "addiction", "withdrawal", "overdose", "toxicity",
+  "malignancy", "cancer", "tumor", "tumors", "mass", "masses", "lesion",
+  "lesions", "metastasis", "metastases", "carcinoma", "sarcoma", "lymphoma",
+  "leukemia", "melanoma", "biopsy", "biopsies", "resection", "resections",
+  "fracture", "fractures", "sprain", "strains", "laceration", "lacerations",
+  "contusion", "contusions", "abrasion", "abrasions", "burn", "burns",
+  "wound", "wounds", "ulcer", "ulcers", "cellulitis", "abscess", "abscesses",
+  "osteomyelitis", "septic", "arthritis", "bursitis", "tendonitis",
+  "surgery", "surgeries", "procedure", "procedures", "operation", "operations",
+  "transplant", "transplantation", "dialysis", "chemotherapy", "radiation",
+  "immunotherapy", "hormone", "therapy", "therapies", "treatment", "treatments",
+  "intervention", "interventions", "regimen", "regimens", "protocol", "protocols",
+  "course", "dose", "doses", "dosage", "dosages", "schedule", "schedules",
+  "amount", "amounts", "quantity", "quantities", "number", "numbers", "count",
+  "value", "values", "level", "levels", "result", "results", "lab", "labs",
+  "test", "tests", "testing", "studies", "study", "scan", "scans", "xray",
+  "xrays", "mri", "ct", "pet", "echo", "ekg", "ecg", "eeg", "emg", "cxr",
+  "vitals", "signs", "exam", "examination", "assessment", "assessments",
+  "impression", "impressions", "plan", "plans", "recommendation", "recommendations",
+  "instruction", "instructions", "education", "counseling", "advice", "advise",
+  "follow", "followup", "follow-up", "followed", "following", "recheck",
+  "revisit", "re-evaluation", "reevaluation", "monitoring", "watch", "watched",
+  "observe", "observed", "observation", "observations", "admit", "admitted",
+  "admission", "admissions", "discharge", "discharged", "transfer", "transferred",
+  "refer", "referred", "referral", "referrals", "consult", "consulted",
+  "consultation", "consultations", "appointment", "appointments", "visit",
+  "visits", "encounter", "encounters", "hospitalization", "hospitalizations",
+  "stay", "stays", "admitted", "readmission", "readmissions",
 ]);
 
 const MED_TOKENS: { canonical: string; token: string }[] = [];
