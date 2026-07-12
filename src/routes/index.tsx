@@ -477,13 +477,16 @@ function Footer() {
 }
 
 function Landing() {
+  const [demoOpen, setDemoOpen] = useState(false);
+  const openDemo = () => setDemoOpen(true);
   return (
     <main className="min-h-screen bg-white">
-      <Hero />
+      <Hero onBookDemo={openDemo} />
       <Compliance />
       <Security />
       <CtaBand />
       <Footer />
+      <BookDemoDialog open={demoOpen} onOpenChange={setDemoOpen} />
     </main>
   );
 }
