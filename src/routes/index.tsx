@@ -398,21 +398,21 @@ function Security() {
     },
   ];
   return (
-    <section className="py-[76px] bg-white">
+    <section className="py-12 md:py-[76px] bg-white">
       <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
         <div className="text-center">
           <div className="text-[12px] font-bold tracking-[0.16em] text-[color:var(--brand)]">DATA SECURITY</div>
-          <h2 className="mt-3 text-[32px] font-bold text-[color:var(--ink)] tracking-[-0.01em]">
+          <h2 className="mt-3 text-[26px] md:text-[32px] font-bold text-[color:var(--ink)] tracking-[-0.01em]">
             Nothing stored means nothing to breach
           </h2>
-          <p className="mt-4 mx-auto max-w-[660px] text-[15.5px] leading-[1.6] text-[color:var(--ink-2)]">
+          <p className="mt-4 mx-auto max-w-[660px] text-[14.5px] md:text-[15.5px] leading-[1.6] text-[color:var(--ink-2)]">
             The strongest security posture is not holding the data at all. MayScribe processes audio in memory, verifies
             deterministically, and keeps PHI inside infrastructure you control.
           </p>
         </div>
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-10 md:mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
           {items.map(({ Icon, title, body }) => (
-            <div key={title} className="bg-white rounded-[10px] p-6" style={{ border: "1px solid var(--border-default)" }}>
+            <div key={title} className="bg-white rounded-[10px] p-5 md:p-6" style={{ border: "1px solid var(--border-default)" }}>
               <div
                 className="h-9 w-9 rounded-[8px] inline-flex items-center justify-center"
                 style={{ background: "var(--chip-blue-bg)", border: "1px solid var(--chip-blue-border)" }}
