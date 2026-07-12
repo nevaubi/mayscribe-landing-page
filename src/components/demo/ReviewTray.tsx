@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Span } from "./verify";
 import {
@@ -6,6 +6,10 @@ import {
   FORMAT_TOGGLES,
   type FormatToggle,
 } from "./format-options";
+
+const PANEL_WIDTH = 380;
+const EDGE_MARGIN = 24;
+const MIN_VISIBLE = 40;
 
 export interface HoldEntry {
   anchorId: string;
