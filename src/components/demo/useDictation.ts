@@ -23,8 +23,10 @@ export interface UseDictationOptions {
 }
 
 // Latency-tuned: shorter endpointing, more aggressive utterance close.
-const DG_URL =
+const DG_URL_BASE =
   "wss://api.deepgram.com/v1/listen?model=nova-3-medical&language=en&smart_format=true&interim_results=true&dictation=true&numerals=true&punctuate=true&endpointing=180&utterance_end_ms=1000";
+const DG_URL_PCM =
+  DG_URL_BASE + "&encoding=linear16&sample_rate=16000&channels=1";
 
 const QUIET_CLOSE_MS = 2000;
 const QUIET_LEVEL_THRESHOLD = 0.025;
