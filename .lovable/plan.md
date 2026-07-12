@@ -1,49 +1,49 @@
-## Goal
+## Scope
 
-Make the MayScribe whitepaper openly accessible from the landing page — no gating. Ship both a CDN-hosted PDF (for download/print) and an on-site `/whitepaper` reader route (for SEO, deep-linking, and readability).
+1. **Rename** `/whitepaper` page and CTAs to **"Whitepaper preview"**.
+2. **Replace** all page content with the 9 sections from the uploaded PDF (`Clinical-Dictation-Without-the-Cloud.pdf`), matching the PDF's structure, section labels, stats, tables, and closing block.
+3. **Restyle** the page to echo the PDF's editorial layout (kicker labels, big serif-style titles, stat blocks, threat/comparison tables, numbered checklist, closing "Built to be audited" block). All within existing MayScribe design tokens.
 
-## Changes
+## Rename changes
 
-### 1. Host the PDF on the Lovable CDN
-Upload `MayScribe_Whitepaper.pdf` from the upload to CDN storage and write the pointer to `src/assets/mayscribe-whitepaper.pdf.asset.json`. No binary in the repo.
+- `src/routes/index.tsx`
+  - Hero button label → **"Whitepaper preview"** (both instances of "Read the whitepaper")
+  - CTA band button → **"Whitepaper preview"**
+  - Footer link text → **"Whitepaper preview"**
+- `src/routes/whitepaper.tsx`
+  - Sticky top-bar title / kicker: **"Whitepaper preview"**
+  - `head()` title/description updated (still under 60/160 chars)
+  - JSON-LD `Article` name updated
+- `Download PDF` button: keep pointing to the existing CDN asset (`src/assets/mayscribe-whitepaper.pdf.asset.json`) — I will NOT swap the underlying PDF in this change. If you want the download to serve the new preview PDF, tell me and I'll upload it via `lovable-assets` in the same edit.
 
-### 2. New route: `/whitepaper`
-Create `src/routes/whitepaper.tsx` — a full readable HTML rendering of the paper for SEO and easy skimming.
+## New page structure (matches PDF page-by-page)
 
-Layout:
-- Sticky top bar: back link to `/`, "Download PDF" button (links to the CDN URL), "Book a demo" button.
-- Header block: title "Clinical Dictation Without the Cloud", subtitle, "July 2026 · MayScribe · Prepared for hospital IT, compliance, and clinical informatics leadership".
-- Table of contents (anchored to `#section-1` … `#section-9`).
-- Body: sections 1–9 rendered as semantic HTML using the site's existing design tokens (Inter, `#061338` headings, `#46587E` body, blue kicker `#0D57FA`, hairline dividers `#E6EEF8`). Max content width ~720px, generous line-height for long-form reading.
-- References list at the bottom with numbered anchors (`[1]`–`[15]`), linking inline citations to the reference entries.
-- Footer reuses the site footer.
+Each section rendered as a `<section>` with a small blue kicker, an H2 title, and body. Uses existing tokens (`--ink`, `--ink-2`, `--brand`, `--hero`, `--border-default`, chip colors).
 
-Route-level `head()`:
-- title: "Whitepaper — Clinical Dictation Without the Cloud | MayScribe"
-- description: A concise summary of the paper's argument (self-hosted dictation, zero audio retention, deterministic verification, honest SOC roadmap).
-- og:title, og:description, twitter:card mirrored.
-- canonical: `/whitepaper`.
-- JSON-LD `Article` schema (headline, datePublished 2026-07, author "MayScribe", about).
+1. **Hero** — Kicker "WHITEPAPER (PREVIEW) · JULY 2026". Title "Clinical Dictation, Without the Vendor Risk". Subtitle from PDF. Three feature tiles (Zero Audio Retention / Self-Hosted in Your VPC / Deterministic Clinical Verification). Italic "Prepared for:" line under a hairline divider.
+2. **Overview** — "The Case for Keeping Dictation Inside Your Own Walls" + two paragraphs + pull-quote card.
+3. **The Problem** — Three big stat blocks (96.3%, 30,000+, $7.42M) with citations, then three subsections (errors frequent, newer models fabricate, cloud concentration).
+4. **Security Architecture** — Intro + 4 architecture cards (Deployed Inside Your Own Cloud / Zero Audio Retention / Tamper-Proof Audit Trail / Hash-Pinned Model Integrity). "Threat Model" table (6 rows).
+5. **Compliance** — HIPAA Alignment Today + SOC 2 Roadmap side-by-side. Numbered "6 Questions to Ask Any Dictation Vendor" list + MayScribe answers line.
+6. **Performance** — 3 stat blocks (~0.4s / 2-Pass / 0 Retention). Six pipeline-step cards (Clinician Speaks → Pass 1 → Pass 2 → Verification Layer → Commit or Hold → Text at Cursor).
+7. **Clinical Accuracy** — Intro + 3 subsections. Error-category table with a horizontal bar (CSS width % from score) for each of the 7 rows.
+8. **Pricing & Scale** — Intro + 3 subsections. Comparison table (Cloud Dictation vs MayScribe) across 6 dimensions.
+9. **Closing** — "Built to Be Audited. Designed to Be Trusted." + 3 tile block (Security Whitepaper / Control Matrix / Pilot Validation) + italic footnote.
 
-### 3. Wire entry points on the landing page
-In `src/routes/index.tsx`:
-- **Dark CTA band**: replace the ghost "Request the whitepaper" button with a ghost "Read the whitepaper →" that links to `/whitepaper` (client `<Link>`, not `<a>`).
-- **Footer row 1**: add a "Whitepaper" link between "Compliance" and "Contact".
-- **Nav (desktop only)**: no change — keep the existing five items uncluttered. The whitepaper is reachable from the CTA band and footer.
+Existing Table of Contents in the sticky/side rail is regenerated to point at these 9 sections. References section from the current page is removed (the PDF cites sources inline as "JAMA Network Open, 2018", "AP, Oct 2024", "IBM, 2025" — these appear inline in Section 3).
 
-### 4. Sitemap
-Add `/whitepaper` as a `<url>` entry in `public/sitemap.xml` so it gets indexed.
+## Style notes
 
-## Non-goals / explicit choices
+- Match PDF visual hierarchy: uppercase blue kicker, large title, generous whitespace between sections.
+- Stat blocks: large ink number, small caption below, muted citation.
+- Tables: hairline borders `--border-hair`, alternating row background `--row-bg`, semibold ink for headers.
+- Bar chart in section 7: div with `background: var(--chip-blue-bg)`, inner fill `background: var(--brand)`, width `${score}%`.
+- Keep sticky top bar with "Download PDF" and "Book a demo" actions.
+- All in one file (`src/routes/whitepaper.tsx`) — no new components file.
 
-- No form gating. No "request the whitepaper" flow. The "Book a demo" modal remains the only lead-capture surface.
-- Not adding a whitepaper link to the top nav — keeps the nav focused on Product / Workflow / Security / Integrations.
-- Not embedding the PDF in an `<iframe>` — the HTML reader route is the primary reading experience; the PDF is a download for people who want to save, print, or share the file.
-- No changes to the "Book a demo" flow, email templates, or existing sections.
+## Out of scope
 
-## Technical notes
+- Not replacing the downloadable PDF binary (unless you say so).
+- No changes to the landing page hero visuals, compliance/security/CTA sections, or backend.
 
-- CDN upload uses `lovable-assets create --file /mnt/user-uploads/MayScribe_Whitepaper.pdf --filename mayscribe-whitepaper.pdf`; write output to `src/assets/mayscribe-whitepaper.pdf.asset.json`.
-- Import the pointer JSON in `whitepaper.tsx` and in `index.tsx` (for the PDF-download button that will also appear at the bottom of the reader page).
-- The reader page content is authored inline as JSX from the parsed whitepaper text — no runtime PDF parsing. If sections are updated later, edit the JSX and re-upload the PDF.
-- The route file is `src/routes/whitepaper.tsx` with `createFileRoute("/whitepaper")` — separate route, own `head()` per the SEO rules.
+Confirm and I'll implement.
