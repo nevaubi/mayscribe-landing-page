@@ -253,6 +253,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
       const ctx = new AC();
       audioCtxRef.current = ctx;
       const src = ctx.createMediaStreamSource(stream);
+      sourceNodeRef.current = src;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.6;
@@ -300,9 +301,34 @@ export function useDictation(opts: UseDictationOptions = {}) {
       rafRef.current = requestAnimationFrame(tick);
     } catch {}
 
+    // Try to bring up the AudioWorklet PCM path. If anything fails we fall
+    // back to the MediaRecorder/opus path further down.
+    let useWorklet = false;
+    try {
+      const ctx = audioCtxRef.current;
+      const src = sourceNodeRef.current;
+      if (ctx && src) {
+        await ctx.audioWorklet.addModule("/pcm-worklet.js");
+        const node = new AudioWorkletNode(ctx, "pcm-downsampler-16k", {
+          numberOfInputs: 1,
+          numberOfOutputs: 0,
+          channelCount: 1,
+        });
+        src.connect(node);
+        workletNodeRef.current = node;
+        useWorklet = true;
+      }
+    } catch (e) {
+      console.warn("[dictation] worklet unavailable, falling back to opus", e);
+      useWorklet = false;
+    }
+
+    if (sessionId !== sessionRef.current) return;
+
+    const dgUrl = useWorklet ? DG_URL_PCM : DG_URL_BASE;
     let socket: WebSocket;
     try {
-      socket = new WebSocket(DG_URL, ["bearer", accessToken]);
+      socket = new WebSocket(dgUrl, ["bearer", accessToken]);
     } catch {
       fail(sessionId, "Dictation unavailable — retry");
       return;
