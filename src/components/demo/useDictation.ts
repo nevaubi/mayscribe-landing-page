@@ -158,10 +158,12 @@ export function useDictation(opts: UseDictationOptions = {}) {
       }, 66);
     } catch {}
 
-    // 3) socket
+    // 3) socket — use query-param token auth (browser-friendly)
+    const socketUrl = `${DG_URL}&token=${encodeURIComponent(accessToken)}`;
+    const socketOpenedAt = Date.now();
     let socket: WebSocket;
     try {
-      socket = new WebSocket(DG_URL, ["token", accessToken]);
+      socket = new WebSocket(socketUrl);
     } catch {
       fail("Dictation unavailable — retry");
       return;
@@ -230,7 +232,17 @@ export function useDictation(opts: UseDictationOptions = {}) {
         fail("Session expired — press F2 to resume");
         return;
       }
-      // unexpected close
+      // 1006 within 1s = handshake rejected; probe REST to surface real reason
+      if (ev.code === 1006 && Date.now() - socketOpenedAt < 1500) {
+        fetch("https://api.deepgram.com/v1/projects", {
+          headers: { Authorization: `Token ${accessToken}` },
+        })
+          .then(async (r) => {
+            const body = await r.text();
+            console.error("[dictation] handshake probe", r.status, body);
+          })
+          .catch((e) => console.error("[dictation] handshake probe failed", e));
+      }
       cleanup();
       setStatus("idle");
     };
