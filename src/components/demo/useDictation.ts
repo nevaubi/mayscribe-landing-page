@@ -156,7 +156,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
     // 3) socket
     let socket: WebSocket;
     try {
-      socket = new WebSocket(DG_URL, ["bearer", accessToken]);
+      socket = new WebSocket(DG_URL, ["token", accessToken]);
     } catch {
       fail("Dictation unavailable — retry");
       return;
