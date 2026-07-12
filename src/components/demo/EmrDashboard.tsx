@@ -144,10 +144,99 @@ function VitalTrend({ trend }: { trend: string }) {
 export function EmrDashboard() {
   const [activePatient, setActivePatient] = useState(PATIENTS[0]);
   const [activeTab, setActiveTab] = useState("notes");
-  const [soap, setSoap] = useState(SOAP_DEFAULTS);
-  const [activeSoapSection, setActiveSoapSection] = useState("subjective");
+  const [soap, setSoap] = useState<Record<SoapSection, string>>(SOAP_DEFAULTS);
+  const [activeSoapSection, setActiveSoapSection] =
+    useState<SoapSection>("subjective");
   const [noteType, setNoteType] = useState("Progress Note");
   const [searchQuery, setSearchQuery] = useState("");
+  const [interim, setInterim] = useState("");
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [flashSection, setFlashSection] = useState<SoapSection | null>(null);
+  const [lastCommitAt, setLastCommitAt] = useState<Date | null>(null);
+
+  const activeSectionRef = useRef<SoapSection>("subjective");
+  activeSectionRef.current = activeSoapSection;
+  const caretRef = useRef<Record<SoapSection, number>>({
+    subjective: 0,
+    objective: 0,
+    assessment: 0,
+    plan: 0,
+  });
+  const textareaRefs = useRef<Record<SoapSection, HTMLTextAreaElement | null>>({
+    subjective: null,
+    objective: null,
+    assessment: null,
+    plan: null,
+  });
+
+  const commitFinal = useCallback((text: string) => {
+    const section = activeSectionRef.current;
+    setInterim("");
+    setSoap((prev) => {
+      const current = prev[section] ?? "";
+      const caret = Math.min(
+        Math.max(0, caretRef.current[section] ?? current.length),
+        current.length,
+      );
+      const before = current.slice(0, caret);
+      const after = current.slice(caret);
+      const needsLeadingSpace =
+        before.length > 0 && !/\s$/.test(before) && !/^\s/.test(text);
+      const insert = needsLeadingSpace ? ` ${text}` : text;
+      const nextValue = before + insert + after;
+      const nextCaret = caret + insert.length;
+      caretRef.current[section] = nextCaret;
+      // restore caret after paint
+      queueMicrotask(() => {
+        const el = textareaRefs.current[section];
+        if (el) {
+          el.selectionStart = nextCaret;
+          el.selectionEnd = nextCaret;
+          // scroll caret into view (approximate)
+          el.scrollTop = el.scrollHeight;
+        }
+      });
+      return { ...prev, [section]: nextValue };
+    });
+    setFlashSection(section);
+    setLastCommitAt(new Date());
+    window.setTimeout(() => {
+      setFlashSection((s) => (s === section ? null : s));
+    }, 600);
+  }, []);
+
+  const dictation = useDictation({
+    onInterim: (t) => setInterim(t),
+    onFinal: (t) => commitFinal(t),
+  });
+
+  const { status, start, stop, audioLevel, expired, errorMessage } = dictation;
+
+  const toggleDictation = useCallback(() => {
+    if (status === "listening" || status === "connecting") {
+      stop();
+      setStartedAt(null);
+      setInterim("");
+    } else {
+      setStartedAt(Date.now());
+      void start();
+    }
+  }, [status, start, stop]);
+
+  // F2 hotkey
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "F2") {
+        e.preventDefault();
+        toggleDictation();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleDictation]);
+
+  const draftTime = (lastCommitAt ?? new Date(2026, 6, 12, 9, 41))
+    .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const filteredPatients = PATIENTS.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
