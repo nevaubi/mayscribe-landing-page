@@ -472,10 +472,68 @@ export function findLASA(word: string): string[] | null {
 
 export function detectAll(text: string): Detected[] {
   const out: Detected[] = [];
+  const consumed: Array<[number, number]> = [];
+  const isConsumed = (s: number, e: number) =>
+    consumed.some(([cs, ce]) => s < ce && e > cs);
+  const consume = (s: number, e: number) => consumed.push([s, e]);
 
-  // dose+unit — expanded units
-  const doseRe = /(\d+(?:\.\d+)?)\s*(mg|mcg|g|mL|L|units?|IU|mEq|mmol|kg)\b/gi;
+  // Age patterns first — e.g. "52-year-old", "52 years old", "age 52"
+  const ageRes: RegExp[] = [
+    /\b(\d{1,3})[- ]?year[- ]?old\b/gi,
+    /\b(\d{1,3})\s*(?:y\.?o\.?|yo)\b/gi,
+    /\bage[d]?\s+(\d{1,3})\b/gi,
+  ];
+  for (const re of ageRes) {
+    for (let m: RegExpExecArray | null; (m = re.exec(text)); ) {
+      out.push({
+        start: m.index,
+        end: m.index + m[0].length,
+        text: m[0],
+        type: "age",
+        meta: { value: parseInt(m[1], 10) },
+      });
+      consume(m.index, m.index + m[0].length);
+    }
+  }
+
+  // Quantity / duration patterns — e.g. "3 months", "for 2 weeks", "x5",
+  // "3 times", "5 episodes". These must NOT be classified as doses.
+  const qtyUnits =
+    "years?|months?|weeks?|days?|hours?|minutes?|min|mins|times|episodes?|attacks?|admissions?|visits?|doses?|pills?|tablets?|caps?|capsules?|ml|drops?|packs?|packets?";
+  const qtyRe = new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*(${qtyUnits})\\b`, "gi");
+  for (let m: RegExpExecArray | null; (m = qtyRe.exec(text)); ) {
+    if (isConsumed(m.index, m.index + m[0].length)) continue;
+    // "ml" is ambiguous — only treat as quantity if not preceded by med context.
+    // We'll allow it here; verify.ts pairs med+dose only when dose is unit-bearing
+    // with mg/mcg/g/units/etc via type === "dose".
+    out.push({
+      start: m.index,
+      end: m.index + m[0].length,
+      text: m[0],
+      type: "quantity",
+      meta: { value: parseFloat(m[1]), unit: m[2] },
+    });
+    consume(m.index, m.index + m[0].length);
+  }
+
+  // "x5", "×5" style counts
+  const xRe = /\b[x×](\d+)\b/gi;
+  for (let m: RegExpExecArray | null; (m = xRe.exec(text)); ) {
+    if (isConsumed(m.index, m.index + m[0].length)) continue;
+    out.push({
+      start: m.index,
+      end: m.index + m[0].length,
+      text: m[0],
+      type: "quantity",
+      meta: { value: parseInt(m[1], 10) },
+    });
+    consume(m.index, m.index + m[0].length);
+  }
+
+  // dose+unit — real drug dose units only
+  const doseRe = /(\d+(?:\.\d+)?)\s*(mg\/kg|mcg\/kg|mg|mcg|g|mL|units?|IU|mEq|mmol|%)\b/gi;
   for (let m: RegExpExecArray | null; (m = doseRe.exec(text)); ) {
+    if (isConsumed(m.index, m.index + m[0].length)) continue;
     out.push({
       start: m.index,
       end: m.index + m[0].length,
@@ -483,6 +541,7 @@ export function detectAll(text: string): Detected[] {
       type: "dose",
       meta: { value: parseFloat(m[1]), unit: m[2] },
     });
+    consume(m.index, m.index + m[0].length);
   }
 
   const latRe = /\b(left|right|bilateral|unilateral)\b/gi;
@@ -495,13 +554,11 @@ export function detectAll(text: string): Detected[] {
     out.push({ start: m.index, end: m.index + m[0].length, text: m[0], type: "negation" });
   }
 
-  // frequency — expanded
   const freqRe = /\b(BID|TID|QID|QHS|QAM|QPM|PRN|STAT|QD|daily|nightly|weekly|monthly|q[24468]h|q12h|q24h|qod|ac|pc|hs)\b/gi;
   for (let m: RegExpExecArray | null; (m = freqRe.exec(text)); ) {
     out.push({ start: m.index, end: m.index + m[0].length, text: m[0], type: "frequency" });
   }
 
-  // route
   const routeRe = /\b(PO|IV|IM|SC|SQ|SL|PR|IN|TD|topical|inhalation|nebulized|ophthalmic|otic|buccal|rectal|vaginal|intranasal|transdermal)\b/gi;
   for (let m: RegExpExecArray | null; (m = routeRe.exec(text)); ) {
     out.push({ start: m.index, end: m.index + m[0].length, text: m[0], type: "route" });
@@ -510,6 +567,7 @@ export function detectAll(text: string): Detected[] {
   const wordRe = /\b[A-Za-z][A-Za-z-]{2,}\b/g;
   for (let m: RegExpExecArray | null; (m = wordRe.exec(text)); ) {
     const tok = m[0];
+    if (isConsumed(m.index, m.index + tok.length)) continue;
     const med = findMed(tok);
     if (med) {
       out.push({
