@@ -291,7 +291,10 @@ export function ReviewTray({
       const det = new Set<FormatToggle>();
       (["punctuation", "unitsAndAbbrev", "sentenceCase", "abbrevPlus", "paragraphs"] as FormatToggle[])
         .forEach((t) => { if (toggles.has(t)) det.add(t); });
-      let out = applyDeterministicFormat(sectionText, det);
+
+      // Pre-clean: always-safe spacing/punctuation normalization.
+      let out = deterministicClean(sectionText);
+      out = applyDeterministicFormat(out, det);
 
       const wantLLM = toggles.has("spelling") || toggles.has("structure");
       if (wantLLM) {
@@ -310,6 +313,10 @@ export function ReviewTray({
           setWarning("Structure formatting unavailable for this pass.");
         }
       }
+
+      // Post-clean: normalize any spacing the LLM (or deterministic pass) left.
+      out = deterministicClean(out);
+
       setPreview({ before: sectionText, after: out });
     } finally {
       setBusy(false);
