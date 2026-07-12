@@ -846,6 +846,101 @@ export function EmrDashboard() {
         }}
       />
       <QuickLookup ref={quickLookupRef} />
+      {batchDiffs.length > 0 && (
+        <div
+          className="fixed z-[9998]"
+          style={{ right: 24, bottom: 24, fontFamily: "'Inter', sans-serif" }}
+        >
+          {!batchOpen ? (
+            <button
+              onClick={() => setBatchOpen(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-full border shadow-lg bg-white hover:border-[#0D57FA] transition-colors"
+              style={{ borderColor: "#D8E2F0" }}
+            >
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ background: "#E4B860" }}
+              />
+              <span className="text-[11px] font-semibold text-[#061338]">
+                Accuracy check
+              </span>
+              <span
+                className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                style={{ background: "#FFF7E6", color: "#8A6116", border: "1px solid #F2E8C8" }}
+              >
+                {batchDiffs.length}
+              </span>
+            </button>
+          ) : (
+            <div
+              className="rounded-xl border bg-white overflow-hidden flex flex-col"
+              style={{
+                width: 360,
+                maxHeight: "60vh",
+                borderColor: "#D8E2F0",
+                boxShadow: "0 24px 64px -24px rgba(5,18,56,0.28)",
+              }}
+            >
+              <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#0D57FA]">
+                    Accuracy check
+                  </span>
+                  <span className="text-[10px] text-[#46587E]">
+                    Parakeet vs streamed
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => { setBatchDiffs([]); setBatchOpen(false); }}
+                    className="text-[10px] text-[#7A8AAC] hover:text-[#061338] px-1.5"
+                    title="Dismiss all"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    onClick={() => setBatchOpen(false)}
+                    className="text-[11px] text-[#46587E] hover:text-[#061338] px-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-y-auto scrollbar-hide p-2 space-y-1.5">
+                {batchDiffs.map((d, i) => (
+                  <div
+                    key={i}
+                    className="p-2 rounded border text-[11px] leading-snug"
+                    style={{ borderColor: "#E6EEF8", background: "#F8FBFF", color: "#0B1F52" }}
+                  >
+                    <div className="text-[9px] text-[#7A8AAC] mb-1 truncate">
+                      …{d.contextBefore} <span className="font-semibold text-[#061338]">•</span> {d.contextAfter}…
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className="px-1.5 py-0.5 rounded"
+                        style={{ background: "#FFF7E6", border: "1px solid #F2E8C8", color: "#8A6116" }}
+                      >
+                        {d.streamed || <em>(missing)</em>}
+                      </span>
+                      <span className="text-[#7A8AAC]">→</span>
+                      <span
+                        className="px-1.5 py-0.5 rounded"
+                        style={{ background: "#F0FFF7", border: "1px solid #C9EEDB", color: "#0F7A44" }}
+                      >
+                        {d.batch || <em>(missing)</em>}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="px-3 py-2 border-t border-border text-[9px] text-[#7A8AAC]">
+                Cross-check only — not auto-applied. Review and edit the note manually if needed.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <div className="h-[calc(100vh-2.5rem)] w-full flex flex-col overflow-hidden bg-background" style={{ fontFamily: "'Figtree', sans-serif" }}>
 
       {/* ── TOP NAV ─────────────────────────────────────────────────── */}
