@@ -281,7 +281,7 @@ function Hero() {
         }}
       />
       <Nav />
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 pb-24 pt-8 lg:pt-14">
+      <div className="max-w-[1280px] mx-auto px-6 lg:px-10 pb-14 pt-4 lg:pb-24 lg:pt-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-5">
             <h1 className="text-[44px] sm:text-[56px] lg:text-[64px] font-bold leading-[1.05] tracking-[-0.02em] text-[color:var(--ink)]">
