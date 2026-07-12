@@ -89,6 +89,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:description", content: "HIPAA-aligned, self-hosted clinical dictation with confidence-aware review, medication intelligence, and native EHR insertion." },
       { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/5d19189d-bc11-4d78-957f-299acc4094e5" },
       { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/5d19189d-bc11-4d78-957f-299acc4094e5" },
+      { name: "google-site-verification", content: "3rlb839M5hozbBZj0PhKZd3hQzrW9OaChly7fv1vlbU" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
