@@ -131,6 +131,22 @@ const SOAP_DEFAULTS: Record<SoapSection, string> = {
   plan: "",
 };
 
+function prepareDictationInsert(rawText: string, before: string, after: string) {
+  const text = rawText.replace(/\s+/g, " ").trim();
+  if (!text) return "";
+
+  const startsWithPunctuation = /^[,.;:!?)]/.test(text);
+  const endsWithOpening = /[(\[{\s]$/.test(before);
+  const needsLeadingSpace =
+    before.length > 0 &&
+    !/\s$/.test(before) &&
+    !startsWithPunctuation &&
+    !endsWithOpening;
+  const needsTrailingSpace = after.length > 0 && !/^\s|^[,.;:!?)]/.test(after);
+
+  return `${needsLeadingSpace ? " " : ""}${text}${needsTrailingSpace ? " " : ""}`;
+}
+
 function StatusDot({ flag }: { flag: string | null }) {
   if (flag === "critical") return <span className="w-2 h-2 rounded-full bg-red-500 inline-block flex-shrink-0" />;
   if (flag === "warning") return <span className="w-2 h-2 rounded-full bg-amber-400 inline-block flex-shrink-0" />;
@@ -171,6 +187,28 @@ export function EmrDashboard() {
     plan: null,
   });
 
+  const syncCaretFromElement = useCallback((el: HTMLTextAreaElement) => {
+    const section = el.dataset.soapSection as SoapSection | undefined;
+    if (!section) return;
+    activeSectionRef.current = section;
+    setActiveSoapSection(section);
+    caretRef.current[section] = el.selectionStart ?? el.value.length;
+  }, []);
+
+  const captureActiveCaret = useCallback(() => {
+    const active = document.activeElement;
+    if (active instanceof HTMLTextAreaElement && active.dataset.soapSection) {
+      syncCaretFromElement(active);
+      return;
+    }
+
+    const section = activeSectionRef.current;
+    const el = textareaRefs.current[section];
+    if (el) {
+      caretRef.current[section] = el.selectionStart ?? el.value.length;
+    }
+  }, [syncCaretFromElement]);
+
   const commitFinal = useCallback((text: string) => {
     const section = activeSectionRef.current;
     setInterim("");
@@ -182,20 +220,18 @@ export function EmrDashboard() {
       );
       const before = current.slice(0, caret);
       const after = current.slice(caret);
-      const needsLeadingSpace =
-        before.length > 0 && !/\s$/.test(before) && !/^\s/.test(text);
-      const insert = needsLeadingSpace ? ` ${text}` : text;
+      const insert = prepareDictationInsert(text, before, after);
+      if (!insert) return prev;
       const nextValue = before + insert + after;
       const nextCaret = caret + insert.length;
       caretRef.current[section] = nextCaret;
-      // restore caret after paint
-      queueMicrotask(() => {
+      // restore focus/caret after React paints the controlled textarea value
+      window.requestAnimationFrame(() => {
         const el = textareaRefs.current[section];
         if (el) {
+          el.focus({ preventScroll: true });
           el.selectionStart = nextCaret;
           el.selectionEnd = nextCaret;
-          // scroll caret into view (approximate)
-          el.scrollTop = el.scrollHeight;
         }
       });
       return { ...prev, [section]: nextValue };
@@ -220,10 +256,12 @@ export function EmrDashboard() {
       setStartedAt(null);
       setInterim("");
     } else {
+      captureActiveCaret();
+      setInterim("");
       setStartedAt(Date.now());
       void start();
     }
-  }, [status, start, stop]);
+  }, [captureActiveCaret, status, start, stop]);
 
   // F2 hotkey
   useEffect(() => {
@@ -463,7 +501,21 @@ export function EmrDashboard() {
                       {(["subjective", "objective", "assessment", "plan"] as const).map(section => (
                         <button
                           key={section}
-                          onClick={() => setActiveSoapSection(section)}
+                          onClick={() => {
+                            setActiveSoapSection(section);
+                            activeSectionRef.current = section;
+                            window.requestAnimationFrame(() => {
+                              const el = textareaRefs.current[section];
+                              if (!el) return;
+                              el.focus({ preventScroll: true });
+                              const caret = Math.min(
+                                caretRef.current[section] ?? el.value.length,
+                                el.value.length,
+                              );
+                              el.selectionStart = caret;
+                              el.selectionEnd = caret;
+                            });
+                          }}
                           className={`px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-colors ${
                             activeSoapSection === section
                               ? "text-[#1B4F8A] bg-[#EEF4FC] border-b-2 border-[#1B4F8A]"
@@ -487,6 +539,7 @@ export function EmrDashboard() {
                           <textarea
                             key={section}
                             ref={(el) => { textareaRefs.current[section] = el; }}
+                            data-soap-section={section}
                             className={`w-full resize-none p-4 text-xs leading-relaxed font-mono text-foreground focus:outline-none border-none transition-colors ${
                               isActive ? "block" : "hidden"
                             } ${isListening ? "ring-2 ring-inset ring-[#0D57FA]" : ""}`}
@@ -502,19 +555,22 @@ export function EmrDashboard() {
                             value={soap[section]}
                             onChange={e => {
                               setSoap(prev => ({ ...prev, [section]: e.target.value }));
-                              caretRef.current[section] = e.target.selectionStart ?? 0;
+                              syncCaretFromElement(e.target);
                             }}
                             onSelect={e => {
-                              caretRef.current[section] = (e.target as HTMLTextAreaElement).selectionStart ?? 0;
+                              syncCaretFromElement(e.target as HTMLTextAreaElement);
+                            }}
+                            onFocus={e => {
+                              syncCaretFromElement(e.target);
                             }}
                             onKeyUp={e => {
-                              caretRef.current[section] = (e.target as HTMLTextAreaElement).selectionStart ?? 0;
+                              syncCaretFromElement(e.target as HTMLTextAreaElement);
                             }}
                             onClick={e => {
-                              caretRef.current[section] = (e.target as HTMLTextAreaElement).selectionStart ?? 0;
+                              syncCaretFromElement(e.target as HTMLTextAreaElement);
                             }}
                             onBlur={e => {
-                              caretRef.current[section] = e.target.selectionStart ?? 0;
+                              caretRef.current[section] = e.target.selectionStart ?? e.target.value.length;
                             }}
                           />
                         );
