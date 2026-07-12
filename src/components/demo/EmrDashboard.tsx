@@ -620,6 +620,13 @@ export function EmrDashboard() {
       setStartedAt(null);
       setInterim("");
     },
+    onBatchTranscript: ({ batchText, streamedText }) => {
+      const diffs = diffTranscripts(streamedText, batchText).slice(0, 20);
+      if (diffs.length > 0) {
+        setBatchDiffs(diffs);
+        setBatchOpen(true);
+      }
+    },
   });
 
   const {
