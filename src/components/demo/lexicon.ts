@@ -406,6 +406,8 @@ export type DetectedType =
   | "med"
   | "dose"
   | "numeric"
+  | "age"
+  | "quantity"
   | "laterality"
   | "negation"
   | "frequency"
