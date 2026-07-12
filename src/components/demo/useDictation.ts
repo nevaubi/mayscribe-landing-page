@@ -216,12 +216,14 @@ export function useDictation(opts: UseDictationOptions = {}) {
       }
     };
 
-    socket.onerror = () => {
+    socket.onerror = (ev) => {
+      console.error("[dictation] socket error", ev);
       if (stoppingRef.current) return;
       fail("Dictation connection error");
     };
 
     socket.onclose = (ev) => {
+      console.warn("[dictation] socket close", ev.code, ev.reason);
       if (stoppingRef.current) return;
       if (ev.code === 1008 || ev.code === 4001 || ev.code === 4008) {
         setExpired(true);
