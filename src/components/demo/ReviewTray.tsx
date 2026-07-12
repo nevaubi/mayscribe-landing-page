@@ -117,8 +117,39 @@ export function ReviewTray({
 }: Props) {
   const [portalReady, setPortalReady] = useState(false);
   const [toggles, setToggles] = useState<Set<FormatToggle>>(new Set());
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ dx: number; dy: number } | null>(null);
 
-  useEffect(() => setPortalReady(typeof document !== "undefined"), []);
+  useEffect(() => {
+    setPortalReady(typeof document !== "undefined");
+    if (typeof window !== "undefined" && pos === null) {
+      setPos({
+        x: Math.max(EDGE_MARGIN, window.innerWidth - PANEL_WIDTH - EDGE_MARGIN),
+        y: 96,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
+    const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    dragRef.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const { dx, dy } = dragRef.current;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const nx = Math.min(w - MIN_VISIBLE, Math.max(MIN_VISIBLE - PANEL_WIDTH, e.clientX - dx));
+    const ny = Math.min(h - MIN_VISIBLE, Math.max(0, e.clientY - dy));
+    setPos({ x: nx, y: ny });
+  };
+  const onHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+  };
 
   const displayText = useMemo(
     () => (toggles.size === 0 ? sectionText : applyFormatToggles(sectionText, toggles)),
