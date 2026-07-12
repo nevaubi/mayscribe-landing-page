@@ -12,7 +12,12 @@ export interface DGWord {
 
 export interface UseDictationOptions {
   onInterim?: (text: string) => void;
-  onFinal?: (text: string, words: DGWord[]) => void;
+  onFinal?: (
+    text: string,
+    words: DGWord[],
+    meta: { speechFinal: boolean },
+  ) => void;
+  onUtteranceEnd?: () => void;
   onError?: (msg: string) => void;
 }
 
