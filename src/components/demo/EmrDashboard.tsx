@@ -960,6 +960,8 @@ export function EmrDashboard() {
                               dismissed={sectionDismissed}
                               flashRange={flashForSection}
                               activeHoldId={activeHoldId}
+                              medMatches={medMatchesBySection[section]}
+                              onMedClick={(name) => handleLookup(name)}
                             />
                             <textarea
                               ref={(el) => { textareaRefs.current[section] = el; }}
