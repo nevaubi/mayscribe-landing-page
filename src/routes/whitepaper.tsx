@@ -79,7 +79,7 @@ function H2({ id, children }: { id: string; children: React.ReactNode }) {
   return (
     <h2
       id={id}
-      className="scroll-mt-24 mt-14 text-[24px] md:text-[28px] font-bold tracking-[-0.01em] text-[color:var(--ink)]"
+      className="scroll-mt-24 mt-12 text-[24px] md:text-[28px] font-bold tracking-[-0.01em] text-[color:var(--ink)]"
     >
       {children}
     </h2>
@@ -90,7 +90,7 @@ function H3({ id, children }: { id: string; children: React.ReactNode }) {
   return (
     <h3
       id={id}
-      className="scroll-mt-24 mt-9 text-[17.5px] md:text-[19px] font-semibold text-[color:var(--ink)]"
+      className="scroll-mt-24 mt-8 text-[17.5px] md:text-[19px] font-semibold text-[color:var(--ink)]"
     >
       {children}
     </h3>
@@ -99,7 +99,7 @@ function H3({ id, children }: { id: string; children: React.ReactNode }) {
 
 function P({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mt-4 text-[15.5px] leading-[1.75] text-[#2E3D5E]">
+    <p className="mt-4 text-[15.5px] leading-[1.75] text-[color:var(--ink-2)]">
       {children}
     </p>
   );
