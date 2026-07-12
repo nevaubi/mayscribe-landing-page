@@ -41,18 +41,55 @@ function UnlockPage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#F8FBFF",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-        fontFamily:
-          'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-      }}
-    >
+    <>
+      <div
+        className="lg:hidden"
+        style={{
+          minHeight: "100vh",
+          background: "#F8FBFF",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          fontFamily:
+            'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 380,
+            width: "100%",
+            background: "#FFFFFF",
+            border: "1px solid #D8E2F0",
+            borderRadius: 12,
+            boxShadow: "0 16px 36px -12px rgba(5,18,56,0.08)",
+            padding: 28,
+            textAlign: "center",
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", color: "#0D57FA" }}>
+            DEMO
+          </p>
+          <h1 style={{ margin: "8px 0 10px", fontSize: 20, fontWeight: 600, color: "#061338", letterSpacing: "-0.01em" }}>
+            Must use desktop for demo access
+          </h1>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: "#46587E" }}>
+            The MayScribe demo is optimized for desktop. Please revisit from a larger screen.
+          </p>
+        </div>
+      </div>
+      <main
+        className="hidden lg:flex"
+        style={{
+          minHeight: "100vh",
+          background: "#F8FBFF",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          fontFamily:
+            'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        }}
+      >
       <form
         onSubmit={onSubmit}
         style={{
