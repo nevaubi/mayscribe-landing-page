@@ -1013,6 +1013,8 @@ export function EmrDashboard() {
                         startedAt={startedAt}
                         errorMessage={errorMessage}
                         expired={expired}
+                        section={dictationTargetRef.current}
+                        lastCommit={null}
                         onStop={() => {
                           stop();
                           setStartedAt(null);
