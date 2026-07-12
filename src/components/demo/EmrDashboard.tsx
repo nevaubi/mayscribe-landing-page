@@ -257,6 +257,32 @@ export function EmrDashboard() {
   const anchorsRef = useRef(anchors);
   anchorsRef.current = anchors;
   const prevSoapRef = useRef<Record<SoapSection, string>>(soap);
+  const quickLookupRef = useRef<QuickLookupHandle>(null);
+
+  const handleLookup = useCallback((q: string) => {
+    quickLookupRef.current?.openWith(q);
+  }, []);
+
+  // Compute lexicon med matches per section (memoised)
+  const medMatchesBySection = useMemo(() => {
+    const out: Record<SoapSection, MedMatch[]> = {
+      subjective: [],
+      objective: [],
+      assessment: [],
+      plan: [],
+    };
+    (Object.keys(out) as SoapSection[]).forEach((sec) => {
+      const text = soap[sec];
+      if (!text) return;
+      const detected = detectAll(text).filter((d) => d.type === "med");
+      out[sec] = detected.map((d) => ({
+        start: d.start,
+        end: d.end,
+        medName: (d.meta?.med as string) ?? d.text,
+      }));
+    });
+    return out;
+  }, [soap]);
 
   const syncCaretFromElement = useCallback((el: HTMLTextAreaElement) => {
     const section = el.dataset.soapSection as SoapSection | undefined;
