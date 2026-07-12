@@ -431,20 +431,20 @@ function Security() {
 
 function CtaBand() {
   return (
-    <section style={{ background: "var(--dark)" }} className="py-16">
-      <div className="max-w-[1200px] mx-auto px-6 lg:px-10 flex flex-col md:flex-row md:items-center md:justify-between gap-8">
+    <section style={{ background: "var(--dark)" }} className="py-12 md:py-16">
+      <div className="max-w-[1200px] mx-auto px-6 lg:px-10 flex flex-col md:flex-row md:items-center md:justify-between gap-5 md:gap-8">
         <div className="max-w-[560px]">
-          <h3 className="text-[26px] font-bold text-white leading-tight">Bring your compliance team.</h3>
-          <p className="mt-3 text-[14px] leading-[1.6] max-w-[520px]" style={{ color: "var(--dark-body)" }}>
+          <h3 className="text-[22px] md:text-[26px] font-bold text-white leading-tight tracking-[-0.01em]">Bring your compliance team.</h3>
+          <p className="mt-3 text-[13.5px] md:text-[14px] leading-[1.6] max-w-[520px]" style={{ color: "var(--dark-body)" }}>
             We built the audit trail, the BAA package, and the control documentation for exactly this review.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button className="bg-white text-[color:var(--ink)] rounded-[8px] h-11 px-5 text-[14px] font-semibold">
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <button className="bg-white text-[color:var(--ink)] rounded-[8px] h-11 px-5 text-[14px] font-semibold w-full sm:w-auto">
             Book a security review
           </button>
           <button
-            className="text-white rounded-[8px] h-11 px-5 text-[14px] font-semibold"
+            className="text-white rounded-[8px] h-11 px-5 text-[14px] font-semibold w-full sm:w-auto"
             style={{ border: "1px solid var(--dark-border)", background: "transparent" }}
           >
             Request the whitepaper
