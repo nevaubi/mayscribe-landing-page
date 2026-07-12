@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DemoIndexRouteImport } from './routes/demo/index'
 import { Route as DemoUnlockRouteImport } from './routes/demo/unlock'
 import { Route as ApiDeepgramTokenRouteImport } from './routes/api/deepgram-token'
+import { Route as ApiBatchTranscribeRouteImport } from './routes/api/batch-transcribe'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 
 const WhitepaperRoute = WhitepaperRouteImport.update({
@@ -47,6 +48,11 @@ const ApiDeepgramTokenRoute = ApiDeepgramTokenRouteImport.update({
   path: '/api/deepgram-token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBatchTranscribeRoute = ApiBatchTranscribeRouteImport.update({
+  id: '/api/batch-transcribe',
+  path: '/api/batch-transcribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LovableEmailTransactionalPreviewRoute =
   LovableEmailTransactionalPreviewRouteImport.update({
     id: '/lovable/email/transactional/preview',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/batch-transcribe': typeof ApiBatchTranscribeRoute
   '/api/deepgram-token': typeof ApiDeepgramTokenRoute
   '/demo/unlock': typeof DemoUnlockRoute
   '/demo/': typeof DemoIndexRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/batch-transcribe': typeof ApiBatchTranscribeRoute
   '/api/deepgram-token': typeof ApiDeepgramTokenRoute
   '/demo/unlock': typeof DemoUnlockRoute
   '/demo': typeof DemoIndexRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/whitepaper': typeof WhitepaperRoute
+  '/api/batch-transcribe': typeof ApiBatchTranscribeRoute
   '/api/deepgram-token': typeof ApiDeepgramTokenRoute
   '/demo/unlock': typeof DemoUnlockRoute
   '/demo/': typeof DemoIndexRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/'
     | '/sitemap.xml'
     | '/whitepaper'
+    | '/api/batch-transcribe'
     | '/api/deepgram-token'
     | '/demo/unlock'
     | '/demo/'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/'
     | '/sitemap.xml'
     | '/whitepaper'
+    | '/api/batch-transcribe'
     | '/api/deepgram-token'
     | '/demo/unlock'
     | '/demo'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/'
     | '/sitemap.xml'
     | '/whitepaper'
+    | '/api/batch-transcribe'
     | '/api/deepgram-token'
     | '/demo/unlock'
     | '/demo/'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   WhitepaperRoute: typeof WhitepaperRoute
+  ApiBatchTranscribeRoute: typeof ApiBatchTranscribeRoute
   ApiDeepgramTokenRoute: typeof ApiDeepgramTokenRoute
   DemoUnlockRoute: typeof DemoUnlockRoute
   DemoIndexRoute: typeof DemoIndexRoute
@@ -166,6 +179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDeepgramTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/batch-transcribe': {
+      id: '/api/batch-transcribe'
+      path: '/api/batch-transcribe'
+      fullPath: '/api/batch-transcribe'
+      preLoaderRoute: typeof ApiBatchTranscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lovable/email/transactional/preview': {
       id: '/lovable/email/transactional/preview'
       path: '/lovable/email/transactional/preview'
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   WhitepaperRoute: WhitepaperRoute,
+  ApiBatchTranscribeRoute: ApiBatchTranscribeRoute,
   ApiDeepgramTokenRoute: ApiDeepgramTokenRoute,
   DemoUnlockRoute: DemoUnlockRoute,
   DemoIndexRoute: DemoIndexRoute,

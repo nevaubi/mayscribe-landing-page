@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { pcmInt16ToWav, concatInt16 } from "./pcmToWav";
 
 export type DictationStatus = "idle" | "connecting" | "listening" | "error";
 
@@ -8,6 +9,11 @@ export interface DGWord {
   end: number;
   confidence: number;
   punctuated_word?: string;
+}
+
+export interface BatchTranscriptResult {
+  batchText: string;
+  streamedText: string;
 }
 
 export interface UseDictationOptions {
@@ -20,6 +26,7 @@ export interface UseDictationOptions {
   onUtteranceEnd?: () => void;
   onError?: (msg: string) => void;
   onQuietStop?: () => void;
+  onBatchTranscript?: (r: BatchTranscriptResult) => void;
 }
 
 // Latency-tuned: shorter endpointing, more aggressive utterance close.
@@ -30,6 +37,8 @@ const DG_URL_PCM =
 
 const QUIET_CLOSE_MS = 2000;
 const QUIET_LEVEL_THRESHOLD = 0.025;
+// ~10 min at 16kHz mono int16 = 9.6M samples.
+const PCM_BUFFER_CAP_SAMPLES = 16000 * 60 * 10;
 
 function wordsForLedger(text: string) {
   return text
@@ -61,15 +70,16 @@ function diffAgainstLedger(transcript: string, ledger: string) {
 }
 
 export function useDictation(opts: UseDictationOptions = {}) {
-  const { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop } = opts;
+  const { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop, onBatchTranscript } = opts;
   const optsRef = useRef({
     onInterim,
     onFinal,
     onUtteranceEnd,
     onError,
     onQuietStop,
+    onBatchTranscript,
   });
-  optsRef.current = { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop };
+  optsRef.current = { onInterim, onFinal, onUtteranceEnd, onError, onQuietStop, onBatchTranscript };
 
   const [status, setStatus] = useState<DictationStatus>("idle");
   const [audioLevel, setAudioLevel] = useState(0);
@@ -93,6 +103,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const quietSinceRef = useRef<number | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const pcmBufferRef = useRef<Int16Array[]>([]);
+  const pcmBufferSamplesRef = useRef(0);
 
   // RAF-batched interim delivery to keep popup smooth.
   const pendingInterimRef = useRef<string | null>(null);
@@ -154,15 +166,45 @@ export function useDictation(opts: UseDictationOptions = {}) {
     setAudioLevel(0);
   }, []);
 
+  const fireBatchTranscribe = useCallback(() => {
+    const cb = optsRef.current.onBatchTranscript;
+    const chunks = pcmBufferRef.current;
+    const total = pcmBufferSamplesRef.current;
+    pcmBufferRef.current = [];
+    pcmBufferSamplesRef.current = 0;
+    if (!cb || total < 16000) return; // <1s of audio — skip
+    const streamedText = finalLedgerRef.current;
+    void (async () => {
+      try {
+        const pcm = concatInt16(chunks);
+        const wav = pcmInt16ToWav(pcm, 16000);
+        const form = new FormData();
+        form.append("file", wav, "audio.wav");
+        const res = await fetch("/api/batch-transcribe", {
+          method: "POST",
+          body: form,
+        });
+        if (!res.ok) return;
+        const j = (await res.json()) as { text?: string };
+        if (typeof j.text === "string" && j.text.trim()) {
+          cb({ batchText: j.text, streamedText });
+        }
+      } catch {
+        // silent — batch is a best-effort cross-check
+      }
+    })();
+  }, []);
+
   const stop = useCallback(() => {
     sessionRef.current += 1;
     stoppingRef.current = true;
+    fireBatchTranscribe();
     cleanup();
     setErrorMessage(null);
     setExpired(false);
     setDictationStatus("idle");
     stoppingRef.current = false;
-  }, [cleanup, setDictationStatus]);
+  }, [cleanup, setDictationStatus, fireBatchTranscribe]);
 
   const fail = useCallback(
     (sessionId: number, msg: string, isExpired = false) => {
@@ -197,6 +239,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
     finalLedgerRef.current = "";
     lastFinalEndRef.current = 0;
     quietSinceRef.current = null;
+    pcmBufferRef.current = [];
+    pcmBufferSamplesRef.current = 0;
     setQuietMsRemaining(null);
     setDictationStatus("connecting");
 
@@ -345,13 +389,16 @@ export function useDictation(opts: UseDictationOptions = {}) {
 
       if (useWorklet && workletNodeRef.current) {
         workletNodeRef.current.port.onmessage = (ev: MessageEvent) => {
-          if (
-            sessionId !== sessionRef.current ||
-            socket.readyState !== WebSocket.OPEN
-          )
-            return;
+          if (sessionId !== sessionRef.current) return;
           const buf = ev.data as ArrayBuffer;
-          if (buf && buf.byteLength) socket.send(buf);
+          if (!buf || !buf.byteLength) return;
+          // Stash a copy for batch cross-check (bounded).
+          if (pcmBufferSamplesRef.current < PCM_BUFFER_CAP_SAMPLES) {
+            const frame = new Int16Array(buf.slice(0));
+            pcmBufferRef.current.push(frame);
+            pcmBufferSamplesRef.current += frame.length;
+          }
+          if (socket.readyState === WebSocket.OPEN) socket.send(buf);
         };
         return;
       }
