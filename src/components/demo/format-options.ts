@@ -142,13 +142,43 @@ function splitSentences(text: string): string[] {
 }
 
 function applyPunctuation(text: string): string {
-  let t = text.replace(/[ \t]+/g, " ");
+  let t = text;
+  // Trim trailing spaces per line, collapse runs of horizontal whitespace.
+  t = t.replace(/[ \t]+/g, " ");
+  t = t.replace(/ +\n/g, "\n");
+  // Remove space before punctuation.
   t = t.replace(/\s+([.,;:!?])/g, "$1");
-  t = t.replace(/([.,;:!?])(?=[A-Za-z0-9])/g, "$1 ");
+  // Ensure a single space after ,;: when followed by a letter/digit.
+  t = t.replace(/([,;:])(?=[A-Za-z0-9])/g, "$1 ");
+  // Ensure a space after sentence terminators when followed by a letter/digit.
+  t = t.replace(/([.!?])(?=[A-Za-z0-9])/g, "$1 ");
+  // Collapse runs of blank lines to at most one blank line.
+  t = t.replace(/\n{3,}/g, "\n\n");
   t = t.trim();
   if (t && !/[.!?]$/.test(t)) t += ".";
   return t;
 }
+
+// Always-safe deterministic cleanup: spacing + punctuation, no casing changes,
+// no word rewrites. Used as a pre- and post-clean around the LLM call.
+export function deterministicClean(text: string): string {
+  let t = text;
+  // Normalize whitespace: tabs to spaces, collapse spaces (preserve newlines).
+  t = t.replace(/[ \t]+/g, " ");
+  t = t.replace(/ +\n/g, "\n");
+  t = t.replace(/\n{3,}/g, "\n\n");
+  // Space around punctuation.
+  t = t.replace(/\s+([.,;:!?])/g, "$1");
+  t = t.replace(/([,;:])(?=[A-Za-z0-9])/g, "$1 ");
+  t = t.replace(/([.!?])(?=[A-Za-z0-9])/g, "$1 ");
+  // One space between number and unit (mg/mcg/mL/g/kg/units/mEq/mmol/IU/%).
+  t = t.replace(
+    /(\d(?:\.\d+)?)\s*(mg|mcg|mL|ml|g|kg|units?|mEq|mmol|IU|%|mmHg|bpm)\b/g,
+    "$1 $2",
+  );
+  return t.trim();
+}
+
 
 function applyUnitsAndAbbrev(text: string): string {
   let t = text;
