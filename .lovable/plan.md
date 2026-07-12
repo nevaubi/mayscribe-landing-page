@@ -1,66 +1,79 @@
-# Format Tab Expansion — Plan
+# Format Section — Reliability Overhaul
 
-Goal: expand the Review popup's Format tab from 3 toggles to 5, add an LLM-backed formatter guarded by a protected-token integrity check, and add a before/after preview with Apply/Undo. The underlying SOAP textarea stays plain text — bold/headers/bullets only render in the preview.
+Goal: when the user clicks **Format section**, spelling, punctuation, spacing, and abbreviation fixes actually land — not silently discarded.
 
-## 1. `src/components/demo/format-options.ts` (deterministic layer)
+## 1. New provider: Fireworks GLM-5.2
 
-Keep the three current toggles (Punctuation, Units & Abbrev, Sentence Case). Add:
+Add secret `FIREWORKS_API_SECRET` via `add_secret` (user will paste). Rewrite `src/lib/format-assist.functions.ts`:
 
-- **`abbrevPlus`** ("Abbreviations+"): extend the existing `ABBREVIATIONS` map to ~250 entries — labs (Na, K, Cl, HCO3, BUN, Cr, WBC, Hgb, Hct, Plt, INR, PTT, AST, ALT, ALP, TSH, HbA1c, LDL, HDL, TG, CRP, ESR, BNP, Trop, etc.), vitals (BP, HR, RR, SpO2, Temp, BMI), routes (PO, IV, IM, SC, SL, PR, IN, TOP, OS/OD/OU), frequencies (QD, BID, TID, QID, QHS, PRN, Q4H, Q6H, Q8H, Q12H, QAC, QPC), and clinical shorthand (SOB, CP, N/V, HA, LOC, ROS, PMH, PSH, FHx, SHx, HPI, A/P, s/p, w/, w/o, c/o, r/o, y/o, pt, hx). Applied case-insensitive **word-boundary only** to prevent mid-word rewrites.
-- **`paragraphs`** ("Paragraphs"): if sentence count > 3, split into paragraphs (blank line separator) at topic-shift cue words appearing at sentence start: `Then`, `Plan`, `Assessment`, `On exam`, `Labs`, `Imaging`. Conservative — only break when the cue starts a sentence.
+- Endpoint: `https://api.fireworks.ai/inference/v1/chat/completions`
+- Model: `accounts/fireworks/models/glm-5p2`
+- `reasoning_effort: "none"`, `max_tokens: 4096`, `temperature: 0`, `top_k: 40`
+- Timeout: 6s (up from 3s), single retry on network/5xx/parse failure
+- Response format: JSON object `{ formatted: string }`
+- System prompt kept — preserve numbers, meds, negations, laterality. Add explicit instruction to fix ordinary spelling AND spacing/whitespace/casing errors.
+- Read `process.env.FIREWORKS_API_SECRET` inside `.handler()` only.
 
-Export `applyDeterministicFormat(text, toggles)` returning plain text.
+Remove Lovable AI Gateway call from format path (dictation-assist still uses it).
 
-## 2. `src/lib/format-assist.functions.ts` (LLM layer)
+## 2. Defaults-on Format button
 
-New `createServerFn({ method: "POST" })` mirroring `dictation-assist.functions.ts`:
-- Input (Zod): `{ text: string, toggles: { spelling: boolean; structure: boolean } }`
-- Provider: `createLovableAiGatewayProvider`, model `google/gemini-3.1-flash-lite`, `temperature: 0`, `response_format: { type: "json_object" }`, 3s `AbortSignal.timeout(3000)`.
-- System prompt (verbatim from spec): "You reformat clinical note text. Fix spelling of ordinary English words. You may reorganize into paragraphs, hyphen bullet lists when the text enumerates items, and UPPERCASE header lines for clear subsections, and you may wrap genuinely critical values in **double asterisks**. You must preserve every number, unit, medication name, dose, negation word, and laterality term exactly as given. Never add, remove, or reword clinical content. Return JSON { formatted: string }."
-- User content composed from toggles: only ask for spelling fixes if `spelling`; allow restructuring if `structure`.
-- Returns `{ formatted: string | null }`; null on timeout/error (caller falls back).
+`ReviewTray.tsx` Format tab:
+- On mount and each time the tab is opened, pre-select **Punctuation, Sentence case, Units & abbrev., Abbreviations+, Spelling, Structure**. User can uncheck any.
+- "Format section" always runs the full enabled set. No behavior change if user unchecks.
+- Keep the *Paragraphs* chip opt-in (it's a structural change users may not want).
 
-## 3. Integrity check — `src/components/demo/formatIntegrity.ts`
+## 3. Loosened integrity check
 
-`extractProtectedTokens(text)` builds a sorted multiset of:
-- Numbers with adjacent units (regex: `\d+(?:\.\d+)?\s*(mg|mcg|g|kg|mL|L|units?|%|mmHg|bpm|mEq|IU|hours?|hrs?|min|days?|weeks?|months?|years?)` and bare numbers).
-- Medication names — reuse `lexicon.ts` exact-name/alias pass and `medMatcher` exact hits.
-- Negations: `no`, `not`, `without`, `denies`, `denied`, `negative`, `absent`, `none`, `never`.
-- Laterality: `left`, `right`, `bilateral`, `bilaterally`, `unilateral`.
+`formatIntegrity.ts`:
+- Before multiset comparison, normalize each protected token:
+  - Numbers-with-units: collapse whitespace between number and unit → `5mg` == `5 mg`. Lowercase unit. `mL`→`ml`, `MG`→`mg`, etc.
+  - Meds: lowercase, strip trailing punctuation.
+  - Negations/laterality: lowercase.
+- Meds/negations/laterality remain strict on identity — only whitespace/case is normalized away.
+- Numeric values must still match exactly (5 ≠ 50).
+- If mismatch: still fall back to deterministic-only + inline note (unchanged UX).
 
-`verifyIntegrity(input, output)` returns boolean by comparing sorted multisets (case-insensitive for meds/negation/laterality; exact numeric string for numbers).
+## 4. Stronger deterministic spacing (runs regardless of LLM outcome)
 
-If mismatch: discard LLM output, apply deterministic-only, and surface inline note "Structure formatting unavailable for this pass." in the Format tab (no toast).
+Extend `applyPunctuation` in `format-options.ts`:
+- Collapse runs of internal spaces (`  ` → ` `) even mid-sentence.
+- Force single space after `,;:` when followed by a letter/digit.
+- Fix missing space after sentence terminator when followed by capital letter (`end.Next` → `end. Next`).
+- Collapse `\n{3,}` → `\n\n`.
+- Trim trailing space on each line.
+- Ensure exactly one space between a number and its unit token (uses same regex family as Units & abbrev.).
 
-## 4. `ReviewTray.tsx` Format tab UX
+Run this pass **twice** in the pipeline: once before LLM (clean input) and once after LLM (clean output), so even a discarded LLM result still yields clean spacing.
 
-Replace current Format tab body with:
-- **Toggle chip row**: Punctuation · Sentence Case · Abbreviations+ · Paragraphs · Spelling · Structure. Chips styled like existing filter chips; Spelling/Structure marked with a small AI dot.
-- **Active section indicator**: shows which SOAP section (Subjective/Objective/Assessment/Plan) is currently active.
-- **"Format section"** primary button: runs pipeline on active section (deterministic first, then LLM if Spelling or Structure on, then integrity check).
-- **Before/After preview**: two stacked panes with subtle bg tint on changed lines (word-level diff via simple LCS or line-diff). Preview renders `**bold**` as real `<strong>`, `# HEADER` lines as uppercase bold headers, `- ` lines as bulleted list — preview only.
-- **Apply / Cancel / Undo**:
-  - Apply → strips `**`, converts headers to plain UPPERCASE lines, bullets remain `- `, paragraphs remain blank-line separated → splices plain text into the active SOAP textarea. Stores prior text in `undoRef`.
-  - Cancel → dismisses preview, no change.
-  - Undo button remains visible in Format tab until next dictation commit or a manual textarea edit invalidates it.
-- **Inline warning slot**: shows "Structure formatting unavailable for this pass." when integrity check fails.
+## 5. Pipeline order (final)
 
-## 5. Wiring in `EmrDashboard.tsx`
+```
+input
+  → deterministic pre-clean (punctuation + spacing always)
+  → applyDeterministicFormat(text, enabled toggles minus spelling/structure)
+  → if spelling OR structure enabled:
+      → Fireworks GLM-5.2 call
+      → integrity check (loosened)
+      → on pass: use LLM output; on fail: keep deterministic result + inline note
+  → deterministic post-clean (punctuation + spacing always)
+  → preview shows before/after; Apply strips markdown → textarea
+```
 
-- Pass active-section id + section text getter/setter to `ReviewTray`.
-- On dictation commit or manual textarea `onChange`, clear `undoRef` for that section.
-- No changes to dictation, verification, or existing textarea rendering — textarea remains plain text, no markdown ever written.
+## 6. Files touched
 
-## Files touched
-
-- `src/components/demo/format-options.ts` — extended
-- `src/components/demo/formatIntegrity.ts` — new
-- `src/lib/format-assist.functions.ts` — new
-- `src/components/demo/ReviewTray.tsx` — Format tab rewrite
-- `src/components/demo/EmrDashboard.tsx` — pass active-section props, undo invalidation
+- `src/lib/format-assist.functions.ts` — swap to Fireworks GLM-5.2, retry, 6s timeout
+- `src/components/demo/format-options.ts` — stronger `applyPunctuation`, exported `deterministicClean()` helper for pre/post passes
+- `src/components/demo/formatIntegrity.ts` — normalization before multiset compare
+- `src/components/demo/ReviewTray.tsx` — Format tab defaults-on, pre/post deterministic passes wired into pipeline
+- New secret: `FIREWORKS_API_SECRET` (requested via `add_secret` at start of build)
 
 ## Non-goals
 
-- No change to dictation, verify.ts, medMatcher, or Quick Lookup.
-- No markdown persistence in the note.
-- No toasts; only inline messaging in the Format tab.
+- No change to dictation, verify, medMatcher, Quick Lookup, or lexicon.
+- No change to Apply/Undo, preview rendering, or plain-text conversion.
+- Lovable AI Gateway still powers dictation-assist; only the Format path moves to Fireworks.
+
+## Answer to your question, plainly
+
+Today: two-step process — a **regex pass** (only for chips you toggled on) followed by an **LLM call** (Gemini 3.1 Flash Lite, only if Spelling/Structure chips on). The LLM has a 3s timeout, small model, and any change to numbers/units (even `5mg`→`5 mg`) makes an integrity guard throw away the whole LLM result, so spelling fixes silently vanish. Combined with chips being off by default, most "Format" clicks were doing only regex punctuation. This plan swaps in a smarter/faster model (GLM-5.2 via Fireworks), turns the useful chips on by default, loosens the guard so trivial spacing normalizations survive, and hardens the always-on deterministic spacing pass so errors don't slip through even when the LLM call fails.
