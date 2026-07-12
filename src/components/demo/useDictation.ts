@@ -21,8 +21,9 @@ export interface UseDictationOptions {
   onError?: (msg: string) => void;
 }
 
+// Latency-tuned: shorter endpointing, more aggressive utterance close.
 const DG_URL =
-  "wss://api.deepgram.com/v1/listen?model=nova-3-medical&language=en&smart_format=true&interim_results=true&dictation=true&numerals=true&punctuate=true&endpointing=300&utterance_end_ms=1200";
+  "wss://api.deepgram.com/v1/listen?model=nova-3-medical&language=en&smart_format=true&interim_results=true&dictation=true&numerals=true&punctuate=true&endpointing=180&utterance_end_ms=1000";
 
 export function useDictation(opts: UseDictationOptions = {}) {
   const { onInterim, onFinal, onUtteranceEnd, onError } = opts;
@@ -41,9 +42,14 @@ export function useDictation(opts: UseDictationOptions = {}) {
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const levelTimerRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const smoothedLevelRef = useRef(0);
   const stoppingRef = useRef(false);
   const lastFinalRef = useRef<{ text: string; at: number } | null>(null);
+
+  // RAF-batched interim delivery to keep popup smooth.
+  const pendingInterimRef = useRef<string | null>(null);
+  const interimRafRef = useRef<number | null>(null);
 
   const setDictationStatus = useCallback((next: DictationStatus) => {
     statusRef.current = next;
@@ -51,10 +57,16 @@ export function useDictation(opts: UseDictationOptions = {}) {
   }, []);
 
   const cleanup = useCallback(() => {
-    if (levelTimerRef.current) {
-      clearInterval(levelTimerRef.current);
-      levelTimerRef.current = null;
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
+    if (interimRafRef.current) {
+      cancelAnimationFrame(interimRafRef.current);
+      interimRafRef.current = null;
+    }
+    pendingInterimRef.current = null;
+    smoothedLevelRef.current = 0;
     try {
       recorderRef.current?.state === "recording" && recorderRef.current.stop();
     } catch {}
@@ -126,7 +138,6 @@ export function useDictation(opts: UseDictationOptions = {}) {
     lastFinalRef.current = null;
     setDictationStatus("connecting");
 
-    // 1) mic — request this first so the call remains tied to the user gesture.
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
@@ -152,7 +163,6 @@ export function useDictation(opts: UseDictationOptions = {}) {
     }
     streamRef.current = stream;
 
-    // 2) token
     let accessToken: string;
     try {
       const res = await fetch("/api/deepgram-token", {
@@ -160,10 +170,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
         headers: { "Content-Type": "application/json" },
       });
       const text = await res.text();
-      if (!res.ok) {
-        console.error("[dictation] token endpoint failed", res.status, text);
-        throw new Error(`token ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`token ${res.status}`);
       const j = JSON.parse(text) as { access_token?: string };
       if (!j.access_token) throw new Error("missing token");
       accessToken = j.access_token;
@@ -175,7 +182,7 @@ export function useDictation(opts: UseDictationOptions = {}) {
 
     if (sessionId !== sessionRef.current) return;
 
-    // Audio analyser for level
+    // RAF-driven audio level sampler for smooth 60fps waveform.
     try {
       const AC =
         window.AudioContext ||
@@ -186,10 +193,11 @@ export function useDictation(opts: UseDictationOptions = {}) {
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.6;
       src.connect(analyser);
       analyserRef.current = analyser;
       const buf = new Uint8Array(analyser.frequencyBinCount);
-      levelTimerRef.current = window.setInterval(() => {
+      const tick = () => {
         if (!analyserRef.current) return;
         analyserRef.current.getByteTimeDomainData(buf);
         let sum = 0;
@@ -198,12 +206,16 @@ export function useDictation(opts: UseDictationOptions = {}) {
           sum += v * v;
         }
         const rms = Math.sqrt(sum / buf.length);
-        setAudioLevel(Math.min(1, rms * 2.2));
-      }, 66);
+        const target = Math.min(1, rms * 2.4);
+        // Ease toward target for glide-y bars
+        smoothedLevelRef.current +=
+          (target - smoothedLevelRef.current) * 0.35;
+        setAudioLevel(smoothedLevelRef.current);
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
     } catch {}
 
-    // 3) socket — browsers cannot set Authorization headers on WebSockets,
-    // so Deepgram expects temporary access tokens as bearer subprotocol auth.
     let socket: WebSocket;
     try {
       socket = new WebSocket(DG_URL, ["bearer", accessToken]);
@@ -225,7 +237,10 @@ export function useDictation(opts: UseDictationOptions = {}) {
         const mimeType = MediaRecorder.isTypeSupported(preferredType)
           ? preferredType
           : "audio/webm";
-        const rec = new MediaRecorder(stream, { mimeType });
+        const rec = new MediaRecorder(stream, {
+          mimeType,
+          audioBitsPerSecond: 32000,
+        });
         recorderRef.current = rec;
         rec.ondataavailable = (ev) => {
           if (
@@ -237,7 +252,8 @@ export function useDictation(opts: UseDictationOptions = {}) {
             socket.send(ev.data);
           }
         };
-        rec.start(150);
+        // Smaller timeslice = faster interim delivery.
+        rec.start(80);
       } catch {
         fail(sessionId, "Recorder unsupported in this browser");
       }
@@ -276,7 +292,16 @@ export function useDictation(opts: UseDictationOptions = {}) {
             speechFinal: Boolean(msg.speech_final),
           });
         } else {
-          optsRef.current.onInterim?.(transcript);
+          // Coalesce rapid interim events into the next animation frame.
+          pendingInterimRef.current = transcript;
+          if (interimRafRef.current == null) {
+            interimRafRef.current = requestAnimationFrame(() => {
+              interimRafRef.current = null;
+              const t = pendingInterimRef.current;
+              pendingInterimRef.current = null;
+              if (t != null) optsRef.current.onInterim?.(t);
+            });
+          }
         }
       }
     };
@@ -290,12 +315,10 @@ export function useDictation(opts: UseDictationOptions = {}) {
     socket.onclose = (ev) => {
       if (stoppingRef.current || sessionId !== sessionRef.current) return;
       if (ev.code === 1008 || ev.code === 4001 || ev.code === 4008) {
-        console.warn("[dictation] socket close", ev.code, ev.reason);
         fail(sessionId, "Session expired — press F2 to resume", true);
         return;
       }
       if (ev.code !== 1000 && ev.code !== 1005) {
-        console.warn("[dictation] socket close", ev.code, ev.reason);
         fail(sessionId, "Dictation disconnected — press F2 to retry");
         return;
       }
