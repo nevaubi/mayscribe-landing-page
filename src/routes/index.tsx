@@ -63,9 +63,6 @@ function Nav() {
           <NavLink>Integrations</NavLink>
         </nav>
         <div className="flex items-center gap-5">
-          <a href="#" className="hidden sm:inline text-[14px] font-medium text-[color:var(--ink)]">
-            Sign in
-          </a>
           <GradientButton>
             Book a demo <ArrowRight className="h-4 w-4" />
           </GradientButton>
@@ -296,9 +293,6 @@ function Hero() {
               fast insertion into the existing note workflow.
             </p>
             <div className="mt-7 lg:mt-8 flex flex-wrap gap-3">
-              <button className="bg-[color:var(--brand-deep)] text-white rounded-[8px] h-11 lg:h-12 px-5 text-[14.5px] lg:text-[15px] font-semibold inline-flex items-center gap-2 shadow-btn flex-1 sm:flex-none justify-center">
-                Start dictating <ArrowRight className="h-4 w-4" />
-              </button>
               <button
                 className="bg-white rounded-[8px] h-11 lg:h-12 px-5 text-[14.5px] lg:text-[15px] font-semibold text-[color:var(--ink)] inline-flex items-center gap-2 flex-1 sm:flex-none justify-center"
                 style={{ border: "1px solid var(--border-strong)" }}
@@ -444,9 +438,6 @@ function CtaBand() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-          <button className="bg-white text-[color:var(--ink)] rounded-[8px] h-11 px-5 text-[14px] font-semibold w-full sm:w-auto">
-            Book a security review
-          </button>
           <button
             className="text-white rounded-[8px] h-11 px-5 text-[14px] font-semibold w-full sm:w-auto"
             style={{ border: "1px solid var(--dark-border)", background: "transparent" }}
