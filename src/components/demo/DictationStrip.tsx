@@ -95,6 +95,16 @@ export function DictationStrip({
     return () => clearInterval(id);
   }, [startedAt, status]);
 
+  // Amber pulse on new hold while review tray closed.
+  const [pulseKey, setPulseKey] = useState(0);
+  const prevCountRef = useRef(holdCount);
+  useEffect(() => {
+    if (holdCount > prevCountRef.current && reviewTrayClosed) {
+      setPulseKey((k) => k + 1);
+    }
+    prevCountRef.current = holdCount;
+  }, [holdCount, reviewTrayClosed]);
+
   if (!portalReady || !visible) return null;
 
   const showError = status === "error";
