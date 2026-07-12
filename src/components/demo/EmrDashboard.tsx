@@ -247,6 +247,7 @@ export function EmrDashboard() {
   const dictation = useDictation({
     onInterim: (t) => setInterim(t),
     onFinal: (t) => commitFinal(t),
+    onError: () => setInterim(""),
   });
 
   const { status, start, stop, audioLevel, expired, errorMessage } = dictation;
