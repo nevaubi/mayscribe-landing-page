@@ -51,7 +51,7 @@ function GradientButton({ children, className = "", onClick }: { children: React
   );
 }
 
-function Nav() {
+function Nav({ onBookDemo }: { onBookDemo: () => void }) {
   return (
     <header className="w-full">
       <div className="max-w-[1280px] mx-auto px-6 lg:px-10 h-[60px] md:h-[72px] flex items-center justify-between">
@@ -66,7 +66,7 @@ function Nav() {
           <NavLink>Integrations</NavLink>
         </nav>
         <div className="flex items-center gap-5">
-          <GradientButton>
+          <GradientButton onClick={onBookDemo}>
             Book a demo <ArrowRight className="h-4 w-4" />
           </GradientButton>
         </div>
