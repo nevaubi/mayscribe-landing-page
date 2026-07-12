@@ -1,47 +1,42 @@
-## Goal
 
-Get `/demo` live dictation working end-to-end. Two independent bugs are likely stacked:
+## What the new errors mean
 
-- `/api/deepgram-token` returns 502 → upstream `POST /v1/auth/grant` is failing.
-- Even with a token, the WebSocket to `wss://api.deepgram.com/v1/listen` is opened with the wrong subprotocol.
+Close code **1006** = the WebSocket handshake was aborted before Deepgram could return a normal close frame. No `4001/4008/1008` means it isn't the auth-scope error we hit before. Two likely causes, in order:
 
-## Step 1 — Diagnose the 502 (no code change)
+1. **Subprotocol auth is being rejected.** Deepgram's browser-token pattern (`new WebSocket(url, ["token", tempToken])`) is finicky — some Deepgram endpoints only accept the temp token as a **query param** (`?token=...`), and browsers give exactly this `1006 + no reason` when the server refuses the subprotocol.
+2. **The `/api/deepgram-token` endpoint itself is misbehaving.** My server-side probe just returned **HTTP 307** (a redirect) instead of a JSON body — that would make the client parse a redirect page as JSON, extract `undefined` as the token, and produce exactly this failure mode. I want to confirm this in build mode before assuming (1).
 
-Once in build mode, hit our own endpoint against the preview and inspect the upstream response verbatim:
+## Plan
 
-- Curl `POST https://<preview>/api/deepgram-token` with an allowed `Origin` header and log the status + body.
-- Temporarily have the handler forward Deepgram's status + response text on failure (instead of a flat `502 Upstream error`) so we can see what Deepgram is actually saying (`invalid credentials`, `insufficient scope`, `plan not entitled`, etc.). Revert this verbose surface after diagnosis.
+### Step 1 — Verify the token endpoint end-to-end
+In build mode, hit `/api/deepgram-token` from the sandbox with the exact origin the browser uses, follow redirects, and log the JSON. If it returns a real `access_token`, the token layer is fine and the problem is (1). If not, fix the route first.
 
-Two probable outcomes:
+### Step 2 — Switch to Deepgram's query-param auth for browser sockets
+Regardless of Step 1, move token auth off the subprotocol and onto the URL, which is Deepgram's documented, browser-friendly path and eliminates one whole class of handshake failures:
 
-a) **Key is wrong type / lacks scope.** `/v1/auth/grant` requires a Deepgram-issued **Project API Key** with the "keys:write" (member) scope so it can mint a short-lived token. A restricted key with only `usage:write` (streaming) will 401/403 here. Fix: user rotates `DEEPGRAM_API_KEY` in Deepgram to a Project key with the right scope; no code change.
-
-b) **Endpoint / payload shape mismatch.** In that case adjust the handler to match what the real response returns (some accounts get `{ key, expires_in }` rather than `{ access_token }`).
-
-## Step 2 — Fix the WebSocket subprotocol
-
-Independent of the token issue, browser `WebSocket(url, protocols)` auth against `wss://api.deepgram.com/v1/listen` uses the two-element subprotocol pair `["token", "<token>"]`, not `["bearer", "<token>"]`. Update `src/components/demo/useDictation.ts`:
-
-```ts
-socket = new WebSocket(DG_URL, ["token", accessToken]);
+```
+wss://api.deepgram.com/v1/listen?token=<TEMP_TOKEN>&model=nova-3-medical&...
 ```
 
-If that still closes with 1008, fall back to sending the token via the query string on connect — but only after confirming the token itself is valid via Step 1.
+Construct the socket with **no** subprotocol argument. Keep everything else in `useDictation.ts` unchanged (MediaRecorder, analyser, commit flow, F2, DictationStrip).
 
-## Step 3 — Better error surfacing in the UI
+### Step 3 — Surface the real close reason
+Deepgram sometimes sends the reason in the close frame but the browser only exposes it when the handshake completes. Add a one-shot `fetch("https://api.deepgram.com/v1/projects", { headers: { Authorization: "Token <tempToken>" }})` probe *only if* the socket closes with 1006 within 1 second — the HTTP response body tells us exactly why (bad token, wrong scope, expired, region-blocked). Log it and stop; do not retry automatically.
 
-Right now the hook collapses every failure into "Dictation unavailable — retry" or "session expired". While we're debugging, log `event.code` and `event.reason` from `socket.onclose` and the response text from the token fetch to the console so we can tell the two failure modes apart without another round-trip. Keep the user-facing copy the same.
+### Step 4 — Verify
+Load `/demo` in incognito on the published site, press F2, confirm:
+- Network tab shows a 200 from `/api/deepgram-token` with `access_token` in the JSON
+- WS to `api.deepgram.com` shows `101 Switching Protocols`
+- Console logs interim transcripts as you speak
 
-## Step 4 — Verify
+No visual changes. No landing page or auth changes.
 
-- In incognito on `mayscribe.com/demo`, unlock, press F2, speak.
-- Confirm: token endpoint returns 200 JSON, socket opens (status flips `connecting` → `listening`), waveform reacts to real audio, interim italic text updates, finals splice into the active SOAP textarea at the caret with the light blue flash.
-- Republish.
+## Files touched (build mode)
 
-## Not in scope
+- `src/components/demo/useDictation.ts` — switch to `?token=` URL auth, drop the `["token", ...]` subprotocol arg, add the 1-second post-close probe with clear console output.
+- `src/routes/api/deepgram-token.ts` — only if Step 1 shows the 307 redirect is originating here (likely a same-origin/trailing-slash check); leave alone otherwise.
 
-No landing-page, gate, or EMR-layout changes. The stale mayscribe.com view you saw is browser cache — incognito already shows the deployed build, so no publish action is needed for that.
-
-## Question before I execute
-
-Can you confirm the `DEEPGRAM_API_KEY` you saved is a **Deepgram Project API Key created in the Deepgram console** (not, e.g., a member/user login token or a key scoped only to streaming)? If you're not sure, I'll surface the exact upstream error message from Step 1 first and we'll know from that response whether the key needs to be rotated.
+## Not doing
+- No change to landing page, `/whitepaper`, `/demo` gate, or EmrDashboard UI.
+- No rotation of `DEEPGRAM_API_KEY` — you already installed the admin-role key.
+- No fallback to raw API key in the browser.
